@@ -247,8 +247,11 @@ export class MainMap extends Phaser.Scene {
     });
 
     // Keyboard zoom - Ctrl + / Ctrl -
+    // Escape - cancel building placement
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey) {
+      if (event.key === 'Escape') {
+        this.cancelBuildingPlacement();
+      } else if (event.ctrlKey || event.metaKey) {
         if (event.key === '=' || event.key === '+') {
           event.preventDefault();
           const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom + 0.1, 0.2, 2);
@@ -259,6 +262,30 @@ export class MainMap extends Phaser.Scene {
           this.cameras.main.setZoom(newZoom);
         }
       }
+    });
+
+    // Right-click - cancel building placement
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown() && this.selectedBuildingType) {
+        this.cancelBuildingPlacement();
+      }
+    });
+  }
+
+  /**
+   * Cancel building placement mode
+   */
+  private cancelBuildingPlacement(): void {
+    this.selectedBuildingType = null;
+    this.lastValidPosition = null;
+
+    if (this.ghostBuilding) {
+      this.ghostBuilding.hide();
+    }
+
+    // Remove selected state from all buttons
+    document.querySelectorAll('.building-btn').forEach((btn) => {
+      btn.classList.remove('selected');
     });
   }
 
@@ -272,6 +299,12 @@ export class MainMap extends Phaser.Scene {
       btn.addEventListener('click', (e) => {
         const target = e.currentTarget as HTMLElement;
         const buildingType = target.dataset.building as BuildingType;
+
+        // Toggle: clicking same button again deselects
+        if (this.selectedBuildingType === buildingType) {
+          this.cancelBuildingPlacement();
+          return;
+        }
 
         // Update selection state
         buttons.forEach((b) => b.classList.remove('selected'));
