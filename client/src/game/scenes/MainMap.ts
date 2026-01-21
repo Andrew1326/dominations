@@ -11,6 +11,8 @@ import { Building, GhostBuilding } from '../entities/Building';
 import type { BuildingType, BuildingData, BaseLayout, Resources, MatchFoundMessage } from '@shared/types';
 import {
   GRID_SIZE,
+  TILE_WIDTH,
+  TILE_HEIGHT,
   TILE_WIDTH_HALF,
   TILE_HEIGHT_HALF,
   GRID_LINE_COLOR,
@@ -44,15 +46,35 @@ export class MainMap extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
-    // Calculate grid origin (center of screen, offset for isometric view)
-    const originX = this.cameras.main.width / 2;
-    const originY = 100; // Top padding
+    // Calculate grid dimensions for camera setup
+    const gridPixelWidth = GRID_SIZE * TILE_WIDTH;
+    const gridPixelHeight = GRID_SIZE * TILE_HEIGHT;
+
+    // Calculate zoom to fit entire grid in view with padding
+    const paddingFactor = 0.85; // 85% of viewport used for grid
+    const zoomX = (this.cameras.main.width * paddingFactor) / gridPixelWidth;
+    const zoomY = (this.cameras.main.height * paddingFactor) / gridPixelHeight;
+    const zoom = Math.min(zoomX, zoomY);
+
+    // Set camera zoom
+    this.cameras.main.setZoom(zoom);
+
+    // Grid origin at a fixed world position - top point of the isometric grid
+    // The grid extends down and to both sides from this point
+    const originX = gridPixelWidth / 2;
+    const originY = 50; // Small top padding
 
     // Initialize grid system
     this.gridSystem = new GridSystem(originX, originY);
 
     // Draw the grid
     this.drawGrid();
+
+    // Center the camera on the grid center
+    // Grid center in world coords is at (originX, originY + gridPixelHeight/2)
+    const gridCenterX = originX;
+    const gridCenterY = originY + gridPixelHeight / 2;
+    this.cameras.main.centerOn(gridCenterX, gridCenterY);
 
     // Setup input handlers
     this.setupInput();
@@ -130,11 +152,29 @@ export class MainMap extends Phaser.Scene {
    * Setup mouse/touch input handlers
    */
   private setupInput(): void {
-    // Pointer move - update ghost building position
+    // Track dragging state for camera pan
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let cameraStartX = 0;
+    let cameraStartY = 0;
+
+    // Pointer move - update ghost building position and handle drag
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      // Handle camera dragging
+      if (isDragging && pointer.isDown) {
+        const dx = pointer.x - dragStartX;
+        const dy = pointer.y - dragStartY;
+        this.cameras.main.scrollX = cameraStartX - dx / this.cameras.main.zoom;
+        this.cameras.main.scrollY = cameraStartY - dy / this.cameras.main.zoom;
+        return;
+      }
+
       if (!this.selectedBuildingType || !this.ghostBuilding) return;
 
-      const gridPos = this.gridSystem.screenToGrid(pointer.x, pointer.y);
+      // Convert screen coordinates to world coordinates (accounting for camera)
+      const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const gridPos = this.gridSystem.screenToGrid(worldPoint.x, worldPoint.y);
       const def = BUILDINGS[this.selectedBuildingType];
 
       // Check if placement is valid
@@ -155,16 +195,64 @@ export class MainMap extends Phaser.Scene {
       this.lastValidPosition = { row: gridPos.row, col: gridPos.col, valid: isValid };
     });
 
-    // Pointer down - place building
-    this.input.on('pointerdown', () => {
-      if (!this.selectedBuildingType || !this.lastValidPosition) return;
-      if (!this.lastValidPosition.valid) return;
+    // Pointer down - start drag or place building
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // If no building selected, start camera drag
+      if (!this.selectedBuildingType) {
+        isDragging = true;
+        dragStartX = pointer.x;
+        dragStartY = pointer.y;
+        cameraStartX = this.cameras.main.scrollX;
+        cameraStartY = this.cameras.main.scrollY;
+        return;
+      }
+
+      // Place building if valid position
+      if (!this.lastValidPosition || !this.lastValidPosition.valid) return;
 
       this.placeBuilding(
         this.selectedBuildingType,
         this.lastValidPosition.row,
         this.lastValidPosition.col
       );
+    });
+
+    // Pointer up - stop dragging
+    this.input.on('pointerup', () => {
+      isDragging = false;
+    });
+
+    // Mouse wheel - zoom in/out (Google Maps style: zoom toward cursor)
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _gameObjects: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
+      // Get world point under cursor before zoom
+      const worldPointBefore = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+
+      // Calculate new zoom level
+      const zoomChange = deltaY > 0 ? -0.1 : 0.1;
+      const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom + zoomChange, 0.2, 2);
+      this.cameras.main.setZoom(newZoom);
+
+      // Get world point under cursor after zoom
+      const worldPointAfter = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+
+      // Adjust camera to keep the point under cursor stationary
+      this.cameras.main.scrollX += worldPointBefore.x - worldPointAfter.x;
+      this.cameras.main.scrollY += worldPointBefore.y - worldPointAfter.y;
+    });
+
+    // Keyboard zoom - Ctrl + / Ctrl -
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key === '=' || event.key === '+') {
+          event.preventDefault();
+          const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom + 0.1, 0.2, 2);
+          this.cameras.main.setZoom(newZoom);
+        } else if (event.key === '-') {
+          event.preventDefault();
+          const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom - 0.1, 0.2, 2);
+          this.cameras.main.setZoom(newZoom);
+        }
+      }
     });
   }
 

@@ -648,12 +648,23 @@ export class Battle extends Phaser.Scene {
 
     const container = this.add.container(pos.x, pos.y);
 
-    // Building shape
-    const width = def.width * TILE_WIDTH_HALF;
-    const height = def.height * TILE_HEIGHT_HALF;
-    const rect = this.add.rectangle(0, 0, width, height, def.color);
-    rect.setStrokeStyle(2, 0x000000);
-    container.add(rect);
+    // Building shape - draw as isometric diamond
+    const isoWidth = (def.width + def.height) * TILE_WIDTH_HALF;
+    const isoHeight = (def.width + def.height) * TILE_HEIGHT_HALF;
+
+    const graphics = this.add.graphics();
+    graphics.fillStyle(def.color, 1);
+    graphics.beginPath();
+    graphics.moveTo(0, -isoHeight / 2);           // Top
+    graphics.lineTo(isoWidth / 2, 0);             // Right
+    graphics.lineTo(0, isoHeight / 2);            // Bottom
+    graphics.lineTo(-isoWidth / 2, 0);            // Left
+    graphics.closePath();
+    graphics.fillPath();
+    graphics.lineStyle(2, 0x000000, 1);
+    graphics.strokePath();
+    container.add(graphics);
+    container.setData('buildingGraphics', graphics);
 
     // HP bar
     const hpBar = this.add.graphics();
@@ -671,18 +682,29 @@ export class Battle extends Phaser.Scene {
    */
   private updateBuildingVisual(container: Phaser.GameObjects.Container, building: BuildingSchema): void {
     const hpBar = container.getData('hpBar') as Phaser.GameObjects.Graphics;
-    const rect = container.list[0] as Phaser.GameObjects.Rectangle;
+    const buildingGraphics = container.getData('buildingGraphics') as Phaser.GameObjects.Graphics;
+    const def = BUILDINGS[building.buildingType as keyof typeof BUILDINGS];
+    const isoHeight = (def.width + def.height) * TILE_HEIGHT_HALF;
 
     if (building.destroyed) {
-      rect.setFillStyle(0x333333);
-      rect.setAlpha(0.5);
+      // Redraw building as gray/destroyed
+      buildingGraphics.clear();
+      const isoWidth = (def.width + def.height) * TILE_WIDTH_HALF;
+      buildingGraphics.fillStyle(0x333333, 0.5);
+      buildingGraphics.beginPath();
+      buildingGraphics.moveTo(0, -isoHeight / 2);
+      buildingGraphics.lineTo(isoWidth / 2, 0);
+      buildingGraphics.lineTo(0, isoHeight / 2);
+      buildingGraphics.lineTo(-isoWidth / 2, 0);
+      buildingGraphics.closePath();
+      buildingGraphics.fillPath();
       hpBar.clear();
     } else {
       // Update HP bar
       hpBar.clear();
-      const barWidth = rect.width - 4;
+      const barWidth = 50;
       const barHeight = 6;
-      const barY = rect.height / 2 + 5;
+      const barY = isoHeight / 2 + 5;
 
       hpBar.fillStyle(0x330000);
       hpBar.fillRect(-barWidth / 2, barY, barWidth, barHeight);

@@ -8,7 +8,7 @@ import type { BuildingDefinition, BuildingType, ResourceCost, Resources, UnitDef
 // Grid Configuration
 // ============================================================
 
-export const GRID_SIZE = 20; // 20x20 grid
+export const GRID_SIZE = 40; // 40x40 grid for more building space
 export const TILE_WIDTH = 64;
 export const TILE_HEIGHT = 32;
 export const TILE_WIDTH_HALF = TILE_WIDTH / 2;
