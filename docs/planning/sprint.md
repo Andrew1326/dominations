@@ -1,7 +1,7 @@
 # Current Sprint
 
 ## Goal
-Phase 1: The Architect (Base Building MVP)
+Phase 2: The Economist (Resource Loop)
 
 ## In Progress
 None
@@ -10,6 +10,7 @@ None
 None
 
 ## Done
+- [x] Implement Phase 2: Server Authoritative Economy (see stories/phase2-server-authoritative-economy.story.md)
 - [x] Implement Phase 1: Base Building MVP (see stories/phase1-base-building-mvp.story.md)
 - [x] Project structure setup
 - [x] Claude Code configuration (agents, skills, commands)

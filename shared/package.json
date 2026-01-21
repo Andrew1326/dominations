@@ -1,0 +1,6 @@
+{
+  "name": "@opencivilizations/shared",
+  "type": "module",
+  "main": "./constants.ts",
+  "types": "./types.ts"
+}

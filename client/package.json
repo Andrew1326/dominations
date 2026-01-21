@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "colyseus.js": "^0.15.0",
     "phaser": "^3.80.1"
   },
   "devDependencies": {

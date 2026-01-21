@@ -12,6 +12,7 @@ export class Building extends Phaser.GameObjects.Graphics {
   public gridRow: number;
   public gridCol: number;
   public readonly buildingId: string;
+  public level: number;
 
   constructor(
     scene: Phaser.Scene,
@@ -20,7 +21,8 @@ export class Building extends Phaser.GameObjects.Graphics {
     gridCol: number,
     screenX: number,
     screenY: number,
-    id?: string
+    id?: string,
+    level: number = 1
   ) {
     super(scene);
 
@@ -29,6 +31,7 @@ export class Building extends Phaser.GameObjects.Graphics {
     this.gridRow = gridRow;
     this.gridCol = gridCol;
     this.buildingId = id || `${buildingType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.level = level;
 
     // Position at screen coordinates
     this.setPosition(screenX, screenY);
@@ -89,6 +92,7 @@ export class Building extends Phaser.GameObjects.Graphics {
       type: this.buildingType,
       row: this.gridRow,
       col: this.gridCol,
+      level: this.level,
     };
   }
 

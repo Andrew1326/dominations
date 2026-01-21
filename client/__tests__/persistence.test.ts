@@ -38,16 +38,18 @@ describe('Persistence', () => {
         type: 'townCenter',
         row: 5,
         col: 5,
+        level: 1,
       };
 
       expect(buildingData.id).toBeDefined();
       expect(buildingData.type).toBe('townCenter');
       expect(buildingData.row).toBe(5);
       expect(buildingData.col).toBe(5);
+      expect(buildingData.level).toBe(1);
     });
 
     it('validates building type matches definition', () => {
-      const types: BuildingType[] = ['townCenter', 'house', 'farm'];
+      const types: BuildingType[] = ['townCenter', 'house', 'farm', 'goldMine', 'oilWell'];
 
       types.forEach((type) => {
         expect(BUILDINGS[type]).toBeDefined();
@@ -60,9 +62,9 @@ describe('Persistence', () => {
     it('serializes layout to JSON correctly', () => {
       const layout: BaseLayout = {
         buildings: [
-          { id: 'townCenter_1', type: 'townCenter', row: 5, col: 5 },
-          { id: 'house_1', type: 'house', row: 2, col: 8 },
-          { id: 'farm_1', type: 'farm', row: 10, col: 3 },
+          { id: 'townCenter_1', type: 'townCenter', row: 5, col: 5, level: 1 },
+          { id: 'house_1', type: 'house', row: 2, col: 8, level: 2 },
+          { id: 'farm_1', type: 'farm', row: 10, col: 3, level: 1 },
         ],
         lastSaved: Date.now(),
       };
@@ -79,7 +81,7 @@ describe('Persistence', () => {
     it('preserves building positions through serialization', () => {
       const layout: BaseLayout = {
         buildings: [
-          { id: 'test_1', type: 'townCenter', row: 7, col: 12 },
+          { id: 'test_1', type: 'townCenter', row: 7, col: 12, level: 1 },
         ],
         lastSaved: Date.now(),
       };
@@ -96,7 +98,7 @@ describe('Persistence', () => {
     it('saves layout to localStorage', () => {
       const layout: BaseLayout = {
         buildings: [
-          { id: 'townCenter_1', type: 'townCenter', row: 5, col: 5 },
+          { id: 'townCenter_1', type: 'townCenter', row: 5, col: 5, level: 1 },
         ],
         lastSaved: Date.now(),
       };
@@ -112,8 +114,8 @@ describe('Persistence', () => {
     it('loads layout from localStorage', () => {
       const layout: BaseLayout = {
         buildings: [
-          { id: 'townCenter_1', type: 'townCenter', row: 5, col: 5 },
-          { id: 'house_1', type: 'house', row: 8, col: 2 },
+          { id: 'townCenter_1', type: 'townCenter', row: 5, col: 5, level: 1 },
+          { id: 'house_1', type: 'house', row: 8, col: 2, level: 1 },
         ],
         lastSaved: 1234567890,
       };
@@ -136,9 +138,9 @@ describe('Persistence', () => {
     it('handles multiple buildings with unique IDs', () => {
       const layout: BaseLayout = {
         buildings: [
-          { id: 'house_1', type: 'house', row: 2, col: 2 },
-          { id: 'house_2', type: 'house', row: 2, col: 5 },
-          { id: 'house_3', type: 'house', row: 5, col: 2 },
+          { id: 'house_1', type: 'house', row: 2, col: 2, level: 1 },
+          { id: 'house_2', type: 'house', row: 2, col: 5, level: 1 },
+          { id: 'house_3', type: 'house', row: 5, col: 2, level: 1 },
         ],
         lastSaved: Date.now(),
       };
@@ -153,7 +155,7 @@ describe('Persistence', () => {
 
     it('clears layout when removed', () => {
       const layout: BaseLayout = {
-        buildings: [{ id: 'test', type: 'farm', row: 0, col: 0 }],
+        buildings: [{ id: 'test', type: 'farm', row: 0, col: 0, level: 1 }],
         lastSaved: Date.now(),
       };
 
@@ -167,9 +169,9 @@ describe('Persistence', () => {
   describe('building placement restoration', () => {
     it('restores buildings to correct grid positions', () => {
       const savedBuildings: BuildingData[] = [
-        { id: 'tc_1', type: 'townCenter', row: 8, col: 8 },
-        { id: 'h_1', type: 'house', row: 3, col: 12 },
-        { id: 'f_1', type: 'farm', row: 15, col: 5 },
+        { id: 'tc_1', type: 'townCenter', row: 8, col: 8, level: 1 },
+        { id: 'h_1', type: 'house', row: 3, col: 12, level: 1 },
+        { id: 'f_1', type: 'farm', row: 15, col: 5, level: 1 },
       ];
 
       const layout: BaseLayout = {
@@ -191,9 +193,9 @@ describe('Persistence', () => {
     it('validates building types during restoration', () => {
       const loaded: BaseLayout = {
         buildings: [
-          { id: 'tc', type: 'townCenter', row: 0, col: 0 },
-          { id: 'h', type: 'house', row: 5, col: 5 },
-          { id: 'f', type: 'farm', row: 10, col: 10 },
+          { id: 'tc', type: 'townCenter', row: 0, col: 0, level: 1 },
+          { id: 'h', type: 'house', row: 5, col: 5, level: 2 },
+          { id: 'f', type: 'farm', row: 10, col: 10, level: 3 },
         ],
         lastSaved: Date.now(),
       };

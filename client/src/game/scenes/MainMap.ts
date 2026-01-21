@@ -1,11 +1,14 @@
 /**
  * MainMap Scene - Primary game scene for base building
+ *
+ * Supports both online (server) and offline (localStorage) modes.
+ * Server mode is primary; falls back to offline if unavailable.
  */
 
 import Phaser from 'phaser';
 import { GridSystem } from '../systems/GridSystem';
 import { Building, GhostBuilding } from '../entities/Building';
-import type { BuildingType, BuildingData, BaseLayout } from '@shared/types';
+import type { BuildingType, BuildingData, BaseLayout, Resources } from '@shared/types';
 import {
   GRID_SIZE,
   TILE_WIDTH_HALF,
@@ -15,20 +18,30 @@ import {
   BUILDINGS,
   STORAGE_KEY,
 } from '@shared/constants';
+import { networkService, ServerState } from '../../services/NetworkService';
 
 export class MainMap extends Phaser.Scene {
   private gridSystem!: GridSystem;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private buildings: Building[] = [];
+  private buildingMap: Map<string, Building> = new Map();
   private ghostBuilding: GhostBuilding | null = null;
   private selectedBuildingType: BuildingType | null = null;
   private lastValidPosition: { row: number; col: number; valid: boolean } | null = null;
+
+  // Online/offline mode
+  private isOnline = false;
+  private resources: Resources = { food: 500, gold: 500, oil: 0 };
+
+  // UI elements
+  private resourceText: Phaser.GameObjects.Text | null = null;
+  private statusText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'MainMap' });
   }
 
-  create(): void {
+  async create(): Promise<void> {
     // Calculate grid origin (center of screen, offset for isometric view)
     const originX = this.cameras.main.width / 2;
     const originY = 100; // Top padding
@@ -45,8 +58,22 @@ export class MainMap extends Phaser.Scene {
     // Setup UI button handlers
     this.setupUIButtons();
 
-    // Load saved layout
-    this.loadLayout();
+    // Create UI text displays
+    this.createUIOverlay();
+
+    // Attempt to connect to server
+    this.updateStatus('Connecting to server...');
+    const connected = await networkService.connect();
+
+    if (connected) {
+      this.isOnline = true;
+      this.updateStatus('Online - Connected to server');
+      this.setupServerSync();
+    } else {
+      this.isOnline = false;
+      this.updateStatus('Offline - Using local storage');
+      this.loadLayout();
+    }
   }
 
   /**
@@ -173,6 +200,156 @@ export class MainMap extends Phaser.Scene {
   }
 
   /**
+   * Create UI overlay for resources and status
+   */
+  private createUIOverlay(): void {
+    // Resource display
+    this.resourceText = this.add.text(10, 10, '', {
+      fontSize: '16px',
+      color: '#ffffff',
+      backgroundColor: '#000000aa',
+      padding: { x: 10, y: 5 },
+    });
+    this.resourceText.setScrollFactor(0);
+    this.resourceText.setDepth(1000);
+    this.updateResourceDisplay();
+
+    // Status display
+    this.statusText = this.add.text(10, 50, '', {
+      fontSize: '14px',
+      color: '#aaaaaa',
+      backgroundColor: '#000000aa',
+      padding: { x: 10, y: 5 },
+    });
+    this.statusText.setScrollFactor(0);
+    this.statusText.setDepth(1000);
+  }
+
+  /**
+   * Update the resource display
+   */
+  private updateResourceDisplay(): void {
+    if (this.resourceText) {
+      this.resourceText.setText(
+        `Food: ${this.resources.food}  |  Gold: ${this.resources.gold}  |  Oil: ${this.resources.oil}`
+      );
+    }
+  }
+
+  /**
+   * Update the status display
+   */
+  private updateStatus(message: string): void {
+    if (this.statusText) {
+      this.statusText.setText(message);
+    }
+    console.log(`[Status] ${message}`);
+  }
+
+  /**
+   * Setup server state synchronization
+   */
+  private setupServerSync(): void {
+    // Handle state changes from server
+    networkService.onState((state: ServerState) => {
+      this.handleServerState(state);
+    });
+
+    // Handle errors from server
+    networkService.onServerError((error) => {
+      this.updateStatus(`Error: ${error.message}`);
+    });
+
+    // Handle building placed confirmation
+    networkService.onBuilding((building: BuildingData) => {
+      // Building will be added through state sync
+      console.log('Building placed confirmed:', building.id);
+    });
+  }
+
+  /**
+   * Handle server state update
+   */
+  private handleServerState(state: ServerState): void {
+    // Update resources
+    this.resources = state.resources;
+    this.updateResourceDisplay();
+
+    // Sync buildings
+    this.syncBuildings(state.buildings);
+  }
+
+  /**
+   * Sync buildings with server state
+   */
+  private syncBuildings(serverBuildings: Map<string, BuildingData>): void {
+    // Track which buildings we've seen from server
+    const serverIds = new Set<string>();
+
+    // Add or update buildings from server
+    serverBuildings.forEach((data, id) => {
+      serverIds.add(id);
+
+      if (!this.buildingMap.has(id)) {
+        // New building from server
+        this.addBuildingFromData(data);
+      }
+    });
+
+    // Remove buildings that no longer exist on server
+    this.buildingMap.forEach((_, id) => {
+      if (!serverIds.has(id)) {
+        this.removeBuildingById(id);
+      }
+    });
+  }
+
+  /**
+   * Add a building from server data
+   */
+  private addBuildingFromData(data: BuildingData): void {
+    const def = BUILDINGS[data.type];
+
+    // Mark grid as occupied
+    this.gridSystem.occupy(data.row, data.col, def.width, def.height);
+
+    // Calculate screen position
+    const centerRow = data.row + def.height / 2;
+    const centerCol = data.col + def.width / 2;
+    const screenPos = this.gridSystem.gridToScreen(centerRow, centerCol);
+
+    // Create building
+    const building = new Building(
+      this,
+      data.type,
+      data.row,
+      data.col,
+      screenPos.x,
+      screenPos.y,
+      data.id,
+      data.level
+    );
+
+    building.setDepth(data.row + data.col);
+    this.buildings.push(building);
+    this.buildingMap.set(data.id, building);
+  }
+
+  /**
+   * Remove a building by ID
+   */
+  private removeBuildingById(id: string): void {
+    const building = this.buildingMap.get(id);
+    if (building) {
+      const def = BUILDINGS[building.buildingType];
+      this.gridSystem.vacate(building.gridRow, building.gridCol, def.width, def.height);
+      building.destroy();
+      this.buildingMap.delete(id);
+      this.buildings = this.buildings.filter((b) => b.buildingId !== id);
+    }
+  }
+
+  /**
    * Place a building on the grid
    */
   private placeBuilding(type: BuildingType, row: number, col: number): void {
@@ -182,6 +359,22 @@ export class MainMap extends Phaser.Scene {
     if (!this.gridSystem.canPlace(row, col, def.width, def.height)) {
       return;
     }
+
+    if (this.isOnline) {
+      // Online mode: send request to server
+      networkService.placeBuilding(type, row, col);
+      // Building will be added when server confirms via state sync
+    } else {
+      // Offline mode: handle locally
+      this.placeBuildingLocally(type, row, col);
+    }
+  }
+
+  /**
+   * Place building locally (offline mode)
+   */
+  private placeBuildingLocally(type: BuildingType, row: number, col: number): void {
+    const def = BUILDINGS[type];
 
     // Mark grid as occupied
     this.gridSystem.occupy(row, col, def.width, def.height);
@@ -198,6 +391,7 @@ export class MainMap extends Phaser.Scene {
     building.setDepth(row + col);
 
     this.buildings.push(building);
+    this.buildingMap.set(building.buildingId, building);
 
     // Save layout
     this.saveLayout();
@@ -249,7 +443,8 @@ export class MainMap extends Phaser.Scene {
           data.col,
           screenPos.x,
           screenPos.y,
-          data.id
+          data.id,
+          data.level || 1
         );
 
         building.setDepth(data.row + data.col);
