@@ -224,20 +224,26 @@ export class MainMap extends Phaser.Scene {
 
     // Mouse wheel - zoom in/out (Google Maps style: zoom toward cursor)
     this.input.on('wheel', (pointer: Phaser.Input.Pointer, _gameObjects: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
-      // Get world point under cursor before zoom
-      const worldPointBefore = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const camera = this.cameras.main;
+      const oldZoom = camera.zoom;
+
+      // Calculate world point under cursor manually (more reliable than getWorldPoint)
+      const worldX = camera.scrollX + (pointer.x - camera.width / 2) / oldZoom;
+      const worldY = camera.scrollY + (pointer.y - camera.height / 2) / oldZoom;
 
       // Calculate new zoom level
       const zoomChange = deltaY > 0 ? -0.1 : 0.1;
-      const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom + zoomChange, 0.2, 2);
-      this.cameras.main.setZoom(newZoom);
+      const newZoom = Phaser.Math.Clamp(oldZoom + zoomChange, 0.2, 2);
 
-      // Get world point under cursor after zoom
-      const worldPointAfter = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      // Calculate new scroll so the world point stays under cursor
+      // Formula: worldX = scrollX + (pointerX - width/2) / zoom
+      // Solving for scrollX: scrollX = worldX - (pointerX - width/2) / zoom
+      const newScrollX = worldX - (pointer.x - camera.width / 2) / newZoom;
+      const newScrollY = worldY - (pointer.y - camera.height / 2) / newZoom;
 
-      // Adjust camera to keep the point under cursor stationary
-      this.cameras.main.scrollX += worldPointBefore.x - worldPointAfter.x;
-      this.cameras.main.scrollY += worldPointBefore.y - worldPointAfter.y;
+      // Apply new scroll and zoom
+      camera.setScroll(newScrollX, newScrollY);
+      camera.setZoom(newZoom);
     });
 
     // Keyboard zoom - Ctrl + / Ctrl -
