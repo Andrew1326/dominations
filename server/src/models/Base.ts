@@ -22,6 +22,8 @@ export interface IBase extends Document {
   resources: Resources;
   resourcesLastUpdated: Date;
   buildings: IBuilding[];
+  shieldUntil: Date | null;  // Protection from attacks until this time
+  lastAttacked: Date | null; // When this base was last attacked
   createdAt: Date;
   updatedAt: Date;
 }
@@ -93,6 +95,14 @@ const BaseSchema = new Schema<IBase>({
   buildings: {
     type: [BuildingSchema],
     default: [],
+  },
+  shieldUntil: {
+    type: Date,
+    default: null,
+  },
+  lastAttacked: {
+    type: Date,
+    default: null,
   },
   createdAt: {
     type: Date,

@@ -3,7 +3,7 @@
  */
 
 import * as Colyseus from 'colyseus.js';
-import type { BuildingType, Resources, BuildingData } from '@shared/types';
+import type { BuildingType, Resources, BuildingData, MatchFoundMessage, NoMatchFoundMessage } from '@shared/types';
 import { DEFAULT_SERVER_URL } from '@shared/constants';
 
 export interface ServerState {
@@ -14,6 +14,8 @@ export interface ServerState {
 export type StateChangeCallback = (state: ServerState) => void;
 export type ErrorCallback = (error: { code: string; message: string }) => void;
 export type BuildingPlacedCallback = (building: BuildingData) => void;
+export type MatchFoundCallback = (attackerId: string, opponent: MatchFoundMessage['opponent']) => void;
+export type NoMatchCallback = (reason: string) => void;
 
 class NetworkService {
   private client: Colyseus.Client | null = null;
@@ -24,6 +26,8 @@ class NetworkService {
   private onStateChange: StateChangeCallback | null = null;
   private onError: ErrorCallback | null = null;
   private onBuildingPlaced: BuildingPlacedCallback | null = null;
+  private onMatchFoundCallback: MatchFoundCallback | null = null;
+  private onNoMatchCallback: NoMatchCallback | null = null;
 
   /**
    * Check if connected to server
@@ -40,10 +44,11 @@ class NetworkService {
       console.log(`Connecting to server: ${serverUrl}`);
       this.client = new Colyseus.Client(serverUrl);
 
-      // Generate or get guest ID
+      // Generate or get guest ID (server adds 'guest_' prefix, so keep this short)
       let guestId = localStorage.getItem('opencivilizations_guest_id');
       if (!guestId) {
-        guestId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Generate short ID: 8 random chars (server will prefix with 'guest_' for 14 total)
+        guestId = Math.random().toString(36).substr(2, 8) + Math.random().toString(36).substr(2, 8);
         localStorage.setItem('opencivilizations_guest_id', guestId);
       }
 
@@ -120,6 +125,21 @@ class NetworkService {
       console.log('Building placed:', message.building);
       if (this.onBuildingPlaced) {
         this.onBuildingPlaced(message.building);
+      }
+    });
+
+    // Matchmaking messages
+    this.room.onMessage('matchFound', (message: MatchFoundMessage) => {
+      console.log('Match found:', message.opponent.username);
+      if (this.onMatchFoundCallback) {
+        this.onMatchFoundCallback(message.attackerId, message.opponent);
+      }
+    });
+
+    this.room.onMessage('noMatchFound', (message: NoMatchFoundMessage) => {
+      console.log('No match found:', message.reason);
+      if (this.onNoMatchCallback) {
+        this.onNoMatchCallback(message.reason);
       }
     });
   }
@@ -220,6 +240,34 @@ class NetworkService {
       gold: player.resources.gold,
       oil: player.resources.oil,
     };
+  }
+
+  /**
+   * Send find match request to server
+   */
+  findMatch(): void {
+    if (!this.room) {
+      console.error('Not connected to server');
+      return;
+    }
+
+    this.room.send('findMatch', {
+      type: 'findMatch',
+    });
+  }
+
+  /**
+   * Register match found callback
+   */
+  onMatchFound(callback: MatchFoundCallback): void {
+    this.onMatchFoundCallback = callback;
+  }
+
+  /**
+   * Register no match found callback
+   */
+  onNoMatch(callback: NoMatchCallback): void {
+    this.onNoMatchCallback = callback;
   }
 }
 

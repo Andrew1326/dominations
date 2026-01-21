@@ -61,12 +61,16 @@ interface UnitSchema {
   targetId: string;
 }
 
-// Scene data passed from caller
+// Scene data passed from caller (from matchmaking)
 interface BattleSceneData {
-  serverUrl: string;
-  attackerId: string;
-  defenderId: string;
-  troops: { type: UnitType; count: number }[];
+  serverUrl?: string;
+  attackerId?: string;
+  defenderId?: string;
+  troops?: { type: UnitType; count: number }[];
+  // New matchmaking format
+  opponentId?: string;
+  opponentUsername?: string;
+  opponentBase?: import('@shared/types').BuildingData[];
 }
 
 /**
@@ -107,9 +111,13 @@ export class Battle extends Phaser.Scene {
   init(data: BattleSceneData): void {
     this.sceneData = data;
 
-    // Initialize remaining troops
+    // Initialize remaining troops (default troops for matchmaking)
     this.remainingTroops.clear();
-    for (const slot of data.troops) {
+    const troops = data.troops || [
+      { type: 'warrior' as UnitType, count: 10 },
+      { type: 'archer' as UnitType, count: 5 },
+    ];
+    for (const slot of troops) {
       this.remainingTroops.set(slot.type, slot.count);
     }
   }
@@ -132,14 +140,61 @@ export class Battle extends Phaser.Scene {
     // Create unit manager
     this.unitManager = new UnitManager(this);
 
-    // Connect to server
-    this.connectToServer();
+    // If we have opponent data from matchmaking, render their base and connect to battle server
+    if (this.sceneData?.opponentBase) {
+      this.renderOpponentBase();
+      this.statusText?.setText(`Attacking ${this.sceneData.opponentUsername}'s base`);
+      // Connect to BattleRoom for actual combat
+      this.connectToBattleRoom();
+    } else if (this.sceneData?.serverUrl) {
+      // Legacy: direct battle room connection
+      this.connectToServer();
+    }
 
     // Enable camera controls
     this.setupCameraControls();
 
     // Handle input for unit deployment
     this.setupDeploymentInput();
+
+    // Auto-select Warrior for convenience
+    this.selectTroop('warrior');
+  }
+
+  /**
+   * Render opponent's base from matchmaking data
+   */
+  private renderOpponentBase(): void {
+    if (!this.sceneData?.opponentBase) return;
+
+    console.log('Opponent base data:', this.sceneData.opponentBase);
+
+    for (const building of this.sceneData.opponentBase) {
+      const def = BUILDINGS[building.type as keyof typeof BUILDINGS];
+      if (!def) {
+        console.warn(`Unknown building type: ${building.type}`);
+        continue;
+      }
+
+      console.log(`Rendering ${building.type} at row=${building.row}, col=${building.col}`);
+
+      const buildingSchema: BuildingSchema = {
+        id: building.id,
+        buildingType: building.type,
+        row: building.row,
+        col: building.col,
+        level: building.level,
+        hp: def.hp * building.level,
+        maxHp: def.hp * building.level,
+        destroyed: false,
+      };
+
+      const container = this.createBuildingVisual(buildingSchema);
+      this.buildingSprites.set(building.id, container);
+      this.updateBuildingVisual(container, buildingSchema);
+    }
+
+    console.log(`Rendered ${this.sceneData.opponentBase.length} buildings from opponent's base`);
   }
 
   /**
@@ -447,7 +502,7 @@ export class Battle extends Phaser.Scene {
   }
 
   /**
-   * Connect to the battle server
+   * Connect to the battle server (legacy)
    */
   private async connectToServer(): Promise<void> {
     if (!this.sceneData) return;
@@ -462,26 +517,74 @@ export class Battle extends Phaser.Scene {
       });
 
       this.statusText?.setText('Setup Phase - Deploy your troops!');
-
-      // Listen for state changes
-      this.room.onStateChange((state) => {
-        this.onStateChange(state);
-      });
-
-      // Listen for errors
-      this.room.onMessage('error', (message) => {
-        console.error('Battle error:', message);
-        this.statusText?.setText(`Error: ${message.message}`);
-      });
-
-      // Listen for disconnect
-      this.room.onLeave(() => {
-        this.statusText?.setText('Disconnected from battle');
-      });
+      this.setupRoomListeners();
     } catch (error) {
       console.error('Failed to connect to battle:', error);
       this.statusText?.setText('Failed to connect to battle server');
     }
+  }
+
+  /**
+   * Connect to BattleRoom after matchmaking
+   */
+  private async connectToBattleRoom(): Promise<void> {
+    if (!this.sceneData?.attackerId || !this.sceneData?.opponentId) {
+      console.error('Missing attackerId or opponentId for BattleRoom');
+      return;
+    }
+
+    try {
+      // Connect to the same server as GameRoom
+      this.client = new Client('ws://localhost:2567');
+
+      // Default troops for matchmaking battles
+      const troops = this.sceneData.troops || [
+        { type: 'warrior' as UnitType, count: 10 },
+        { type: 'archer' as UnitType, count: 5 },
+      ];
+
+      console.log('Connecting to BattleRoom...', {
+        attackerId: this.sceneData.attackerId,
+        defenderId: this.sceneData.opponentId,
+        troops,
+      });
+
+      this.room = await this.client.joinOrCreate<BattleStateSchema>('battle', {
+        attackerId: this.sceneData.attackerId,
+        defenderId: this.sceneData.opponentId,
+        troops,
+      });
+
+      console.log('Connected to BattleRoom:', this.room.sessionId);
+      this.statusText?.setText('Setup Phase - Select troops and deploy!');
+      this.setupRoomListeners();
+    } catch (error) {
+      console.error('Failed to connect to BattleRoom:', error);
+      this.statusText?.setText('Failed to start battle - click to retry');
+    }
+  }
+
+  /**
+   * Setup room event listeners
+   */
+  private setupRoomListeners(): void {
+    if (!this.room) return;
+
+    // Listen for state changes
+    this.room.onStateChange((state) => {
+      this.onStateChange(state);
+    });
+
+    // Listen for errors
+    this.room.onMessage('error', (message) => {
+      console.error('Battle error:', message);
+      this.statusText?.setText(`Error: ${message.message}`);
+    });
+
+    // Listen for disconnect
+    this.room.onLeave(() => {
+      this.statusText?.setText('Disconnected from battle');
+    });
   }
 
   /**
@@ -689,8 +792,18 @@ export class Battle extends Phaser.Scene {
     // Update all units
     this.unitManager?.update(time, delta);
 
+    if (!this.input.keyboard) return;
+
+    // Keyboard shortcuts for troop selection (1 = warrior, 2 = archer)
+    if (Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('ONE'))) {
+      this.selectTroop('warrior');
+    }
+    if (Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('TWO'))) {
+      this.selectTroop('archer');
+    }
+
     // Handle start battle key
-    if (this.room?.state.phase === 'setup' && Phaser.Input.Keyboard.JustDown(this.input.keyboard!.addKey('SPACE'))) {
+    if (this.room?.state.phase === 'setup' && Phaser.Input.Keyboard.JustDown(this.input.keyboard.addKey('SPACE'))) {
       this.room.send('startBattle');
     }
   }

@@ -63,6 +63,54 @@
         color: #666;
         font-size: 12px;
       }
+      #resource-display {
+        display: flex;
+        gap: 15px;
+        padding: 10px 20px;
+        background: #1a1a2e;
+        border: 2px solid #444;
+        border-radius: 8px;
+        color: #fff;
+        font-size: 14px;
+        align-items: center;
+      }
+      #resource-display span {
+        white-space: nowrap;
+      }
+      #food-value { color: #90EE90; }
+      #gold-value { color: #FFD700; }
+      #oil-value { color: #87CEEB; }
+      #status-display {
+        position: fixed;
+        top: 70px;
+        left: 20px;
+        z-index: 100;
+        padding: 8px 15px;
+        background: #1a1a2ecc;
+        border-radius: 6px;
+        color: #aaa;
+        font-size: 13px;
+      }
+      .action-btn {
+        padding: 10px 25px;
+        border: 2px solid #e74c3c;
+        border-radius: 8px;
+        background: #2a1a1e;
+        color: #e74c3c;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-size: 14px;
+        font-weight: bold;
+        margin-left: 10px;
+      }
+      .action-btn:hover {
+        background: #e74c3c;
+        color: #fff;
+      }
+      .action-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
@@ -79,7 +127,14 @@
         <span class="color-dot" style="background: #228B22;"></span>
         Farm (2x2)
       </button>
+      <div id="resource-display">
+        <span>Food: <span id="food-value">0</span></span>
+        <span>Gold: <span id="gold-value">0</span></span>
+        <span>Oil: <span id="oil-value">0</span></span>
+      </div>
+      <button id="attack-btn" class="action-btn">Attack</button>
     </div>
+    <div id="status-display"></div>
     <div id="game-container"></div>
     <div id="instructions">
       Click a building type above, then click on the grid to place. Layout saves automatically.

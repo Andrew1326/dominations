@@ -4,11 +4,12 @@
 
 import { Room, Client } from '@colyseus/core';
 import { Schema, MapSchema, type } from '@colyseus/schema';
-import type { PlaceBuildingMessage, ClientMessage, BuildingType } from '@shared/types';
+import type { PlaceBuildingMessage, ClientMessage, BuildingType, MatchFoundMessage, NoMatchFoundMessage } from '@shared/types';
 import { getOrCreateGuestUser, saveUserBase } from '../services/AuthService';
 import { Base, IBase, IBuilding } from '../models/Base';
 import { startConstruction } from '../mechanics/ConstructionManager';
 import { updateResources } from '../mechanics/ResourceCalculator';
+import { findOpponent } from '../mechanics/MatchmakingService';
 
 // Colyseus Schema classes for state synchronization
 class BuildingSchema extends Schema {
@@ -189,6 +190,10 @@ export class GameRoom extends Room<GameState> {
         this.handleCollectResources(client, player);
         break;
 
+      case 'findMatch':
+        this.handleFindMatch(client, player);
+        break;
+
       default:
         console.warn(`Unknown message type: ${type}`);
     }
@@ -293,5 +298,38 @@ export class GameRoom extends Room<GameState> {
     data.base.resourcesLastUpdated = new Date();
 
     console.log(`Resources collected: food=${updatedResources.food}, gold=${updatedResources.gold}, oil=${updatedResources.oil}`);
+  }
+
+  private async handleFindMatch(client: Client, player: PlayerSchema): Promise<void> {
+    const data = this.clientData.get(client.sessionId);
+    if (!data) {
+      client.send('error', { type: 'error', code: 'NO_DATA', message: 'Player data not found' });
+      return;
+    }
+
+    console.log(`Player ${player.odUsername} searching for opponent...`);
+
+    // Find an opponent
+    const result = await findOpponent(data.odUserId);
+
+    if (!result.success || !result.opponent) {
+      const noMatchMsg: NoMatchFoundMessage = {
+        type: 'noMatchFound',
+        reason: result.error || 'No opponents available',
+      };
+      client.send('noMatchFound', noMatchMsg);
+      console.log(`No match found for ${player.odUsername}: ${result.error}`);
+      return;
+    }
+
+    // Send match found message with attacker's ID for BattleRoom connection
+    const matchFoundMsg: MatchFoundMessage = {
+      type: 'matchFound',
+      attackerId: data.odUserId,
+      opponent: result.opponent,
+    };
+    client.send('matchFound', matchFoundMsg);
+
+    console.log(`Match found for ${player.odUsername}: ${result.opponent.username} (${result.opponent.base.length} buildings)`);
   }
 }

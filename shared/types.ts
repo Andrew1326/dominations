@@ -261,3 +261,33 @@ export type BattleServerMessage =
   | BattleTickMessage
   | BattleEndedMessage
   | ErrorMessage;
+
+// ============================================================
+// Matchmaking Types
+// ============================================================
+
+export interface FindMatchMessage {
+  type: 'findMatch';
+}
+
+export interface MatchFoundMessage {
+  type: 'matchFound';
+  attackerId: string;  // Current player's MongoDB ID (for BattleRoom)
+  opponent: {
+    odId: string;
+    username: string;
+    base: BuildingData[];
+  };
+}
+
+export interface NoMatchFoundMessage {
+  type: 'noMatchFound';
+  reason: string;
+}
+
+export type MatchmakingClientMessage = FindMatchMessage;
+
+export type MatchmakingServerMessage =
+  | MatchFoundMessage
+  | NoMatchFoundMessage
+  | ErrorMessage;

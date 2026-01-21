@@ -8,7 +8,7 @@
 import Phaser from 'phaser';
 import { GridSystem } from '../systems/GridSystem';
 import { Building, GhostBuilding } from '../entities/Building';
-import type { BuildingType, BuildingData, BaseLayout, Resources } from '@shared/types';
+import type { BuildingType, BuildingData, BaseLayout, Resources, MatchFoundMessage } from '@shared/types';
 import {
   GRID_SIZE,
   TILE_WIDTH_HALF,
@@ -33,9 +33,11 @@ export class MainMap extends Phaser.Scene {
   private isOnline = false;
   private resources: Resources = { food: 500, gold: 500, oil: 0 };
 
-  // UI elements
-  private resourceText: Phaser.GameObjects.Text | null = null;
-  private statusText: Phaser.GameObjects.Text | null = null;
+  // UI elements (HTML-based)
+  private foodElement: HTMLElement | null = null;
+  private goldElement: HTMLElement | null = null;
+  private oilElement: HTMLElement | null = null;
+  private statusElement: HTMLElement | null = null;
 
   constructor() {
     super({ key: 'MainMap' });
@@ -182,6 +184,14 @@ export class MainMap extends Phaser.Scene {
         this.selectBuildingType(buildingType);
       });
     });
+
+    // Attack button
+    const attackBtn = document.getElementById('attack-btn');
+    if (attackBtn) {
+      attackBtn.addEventListener('click', () => {
+        this.findMatch();
+      });
+    }
   }
 
   /**
@@ -203,45 +213,30 @@ export class MainMap extends Phaser.Scene {
    * Create UI overlay for resources and status
    */
   private createUIOverlay(): void {
-    // Resource display
-    this.resourceText = this.add.text(10, 10, '', {
-      fontSize: '16px',
-      color: '#ffffff',
-      backgroundColor: '#000000aa',
-      padding: { x: 10, y: 5 },
-    });
-    this.resourceText.setScrollFactor(0);
-    this.resourceText.setDepth(1000);
-    this.updateResourceDisplay();
+    // Get HTML elements for resource display
+    this.foodElement = document.getElementById('food-value');
+    this.goldElement = document.getElementById('gold-value');
+    this.oilElement = document.getElementById('oil-value');
+    this.statusElement = document.getElementById('status-display');
 
-    // Status display
-    this.statusText = this.add.text(10, 50, '', {
-      fontSize: '14px',
-      color: '#aaaaaa',
-      backgroundColor: '#000000aa',
-      padding: { x: 10, y: 5 },
-    });
-    this.statusText.setScrollFactor(0);
-    this.statusText.setDepth(1000);
+    this.updateResourceDisplay();
   }
 
   /**
    * Update the resource display
    */
   private updateResourceDisplay(): void {
-    if (this.resourceText) {
-      this.resourceText.setText(
-        `Food: ${this.resources.food}  |  Gold: ${this.resources.gold}  |  Oil: ${this.resources.oil}`
-      );
-    }
+    if (this.foodElement) this.foodElement.textContent = String(this.resources.food);
+    if (this.goldElement) this.goldElement.textContent = String(this.resources.gold);
+    if (this.oilElement) this.oilElement.textContent = String(this.resources.oil);
   }
 
   /**
    * Update the status display
    */
   private updateStatus(message: string): void {
-    if (this.statusText) {
-      this.statusText.setText(message);
+    if (this.statusElement) {
+      this.statusElement.textContent = message;
     }
     console.log(`[Status] ${message}`);
   }
@@ -264,6 +259,15 @@ export class MainMap extends Phaser.Scene {
     networkService.onBuilding((building: BuildingData) => {
       // Building will be added through state sync
       console.log('Building placed confirmed:', building.id);
+    });
+
+    // Handle matchmaking responses
+    networkService.onMatchFound((attackerId: string, opponent: MatchFoundMessage['opponent']) => {
+      this.handleMatchFound(attackerId, opponent);
+    });
+
+    networkService.onNoMatch((reason: string) => {
+      this.updateStatus(`No match found: ${reason}`);
     });
   }
 
@@ -479,5 +483,34 @@ export class MainMap extends Phaser.Scene {
    */
   public getGridSystem(): GridSystem {
     return this.gridSystem;
+  }
+
+  /**
+   * Initiate matchmaking
+   */
+  private findMatch(): void {
+    if (!this.isOnline) {
+      this.updateStatus('Cannot attack in offline mode');
+      return;
+    }
+
+    this.updateStatus('Searching for opponent...');
+    networkService.findMatch();
+  }
+
+  /**
+   * Handle successful match found
+   */
+  private handleMatchFound(attackerId: string, opponent: MatchFoundMessage['opponent']): void {
+    console.log(`Match found: ${opponent.username} with ${opponent.base.length} buildings`);
+    this.updateStatus(`Found opponent: ${opponent.username}`);
+
+    // Store opponent data for Battle scene (including attackerId for BattleRoom)
+    this.scene.start('Battle', {
+      attackerId,
+      opponentId: opponent.odId,
+      opponentUsername: opponent.username,
+      opponentBase: opponent.base,
+    });
   }
 }

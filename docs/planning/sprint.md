@@ -10,6 +10,7 @@ None
 None
 
 ## Done
+- [x] Implement Matchmaking System (see stories/matchmaking-system.story.md)
 - [x] Implement Phase 3: Combat System (see stories/phase3-combat-system.story.md)
 - [x] Implement Phase 2: Server Authoritative Economy (see stories/phase2-server-authoritative-economy.story.md)
 - [x] Implement Phase 1: Base Building MVP (see stories/phase1-base-building-mvp.story.md)

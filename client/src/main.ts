@@ -4,6 +4,7 @@
 
 import Phaser from 'phaser';
 import { MainMap } from './game/scenes/MainMap';
+import { Battle } from './game/scenes/Battle';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -11,7 +12,7 @@ const config: Phaser.Types.Core.GameConfig = {
   width: 1280,
   height: 720,
   backgroundColor: '#0f0f23',
-  scene: [MainMap],
+  scene: [MainMap, Battle],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
