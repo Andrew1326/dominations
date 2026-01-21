@@ -10,6 +10,8 @@ import { Client, Room } from 'colyseus.js';
 import type { UnitData, UnitType } from '../../../../shared/types';
 import {
   GRID_SIZE,
+  TILE_WIDTH,
+  TILE_HEIGHT,
   TILE_WIDTH_HALF,
   TILE_HEIGHT_HALF,
   GRID_LINE_COLOR,
@@ -123,10 +125,21 @@ export class Battle extends Phaser.Scene {
   }
 
   create(): void {
-    // Center the camera
-    const centerX = this.cameras.main.width / 2;
-    const centerY = this.cameras.main.height / 2;
-    this.cameras.main.setScroll(-centerX, -centerY + 200);
+    // Calculate grid dimensions for camera setup
+    const gridPixelWidth = GRID_SIZE * TILE_WIDTH;
+    const gridPixelHeight = GRID_SIZE * TILE_HEIGHT;
+
+    // Calculate zoom to fit entire grid in view with padding
+    const paddingFactor = 0.85;
+    const zoomX = (this.cameras.main.width * paddingFactor) / gridPixelWidth;
+    const zoomY = (this.cameras.main.height * paddingFactor) / gridPixelHeight;
+    const zoom = Math.min(zoomX, zoomY);
+    this.cameras.main.setZoom(zoom);
+
+    // Center the camera on the grid
+    // Grid center is at approximately (0, gridPixelHeight/2) in isometric coords
+    const gridCenterY = gridPixelHeight / 2;
+    this.cameras.main.centerOn(0, gridCenterY);
 
     // Create grid
     this.createGrid();
@@ -428,22 +441,79 @@ export class Battle extends Phaser.Scene {
   }
 
   /**
-   * Setup camera controls (pan/zoom)
+   * Setup camera controls (pan/zoom) - matching MainMap behavior
    */
   private setupCameraControls(): void {
-    // Pan with middle mouse or drag
+    // Track dragging state for camera pan
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let cameraStartX = 0;
+    let cameraStartY = 0;
+
+    // Pointer move - handle camera drag
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown && pointer.middleButtonDown()) {
-        this.cameras.main.scrollX -= pointer.velocity.x / 10;
-        this.cameras.main.scrollY -= pointer.velocity.y / 10;
+      if (isDragging && pointer.isDown) {
+        const dx = pointer.x - dragStartX;
+        const dy = pointer.y - dragStartY;
+        this.cameras.main.scrollX = cameraStartX - dx / this.cameras.main.zoom;
+        this.cameras.main.scrollY = cameraStartY - dy / this.cameras.main.zoom;
       }
     });
 
-    // Zoom with scroll wheel
-    this.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _dx: number, dy: number) => {
-      const zoom = this.cameras.main.zoom;
-      const newZoom = Phaser.Math.Clamp(zoom - dy * 0.001, 0.5, 2);
-      this.cameras.main.setZoom(newZoom);
+    // Pointer down - start drag (right or middle button, or left when no troop selected)
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Allow dragging with right/middle button, or left button when no troop selected
+      if (pointer.rightButtonDown() || pointer.middleButtonDown() ||
+          (pointer.leftButtonDown() && !this.selectedTroopType)) {
+        isDragging = true;
+        dragStartX = pointer.x;
+        dragStartY = pointer.y;
+        cameraStartX = this.cameras.main.scrollX;
+        cameraStartY = this.cameras.main.scrollY;
+      }
+    });
+
+    // Pointer up - stop dragging
+    this.input.on('pointerup', () => {
+      isDragging = false;
+    });
+
+    // Mouse wheel - zoom in/out (Google Maps style: zoom toward cursor)
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _dx: number, dy: number) => {
+      const camera = this.cameras.main;
+      const oldZoom = camera.zoom;
+
+      // Calculate world point under cursor manually
+      const worldX = camera.scrollX + (pointer.x - camera.width / 2) / oldZoom;
+      const worldY = camera.scrollY + (pointer.y - camera.height / 2) / oldZoom;
+
+      // Calculate new zoom level
+      const zoomChange = dy > 0 ? -0.1 : 0.1;
+      const newZoom = Phaser.Math.Clamp(oldZoom + zoomChange, 0.2, 2);
+
+      // Calculate new scroll so the world point stays under cursor
+      const newScrollX = worldX - (pointer.x - camera.width / 2) / newZoom;
+      const newScrollY = worldY - (pointer.y - camera.height / 2) / newZoom;
+
+      // Apply new scroll and zoom
+      camera.setScroll(newScrollX, newScrollY);
+      camera.setZoom(newZoom);
+    });
+
+    // Keyboard zoom - Ctrl + / Ctrl -
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        if (event.key === '=' || event.key === '+') {
+          event.preventDefault();
+          const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom + 0.1, 0.2, 2);
+          this.cameras.main.setZoom(newZoom);
+        } else if (event.key === '-') {
+          event.preventDefault();
+          const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom - 0.1, 0.2, 2);
+          this.cameras.main.setZoom(newZoom);
+        }
+      }
     });
   }
 
