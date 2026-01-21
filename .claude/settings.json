@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/workflow_router.py"
+            "command": "cd /home/andrey/Desktop/dominations && python3 .claude/hooks/workflow_router.py"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/test_enforcement.py"
+            "command": "cd /home/andrey/Desktop/dominations && python3 .claude/hooks/test_enforcement.py"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/test_result_tracker.py"
+            "command": "cd /home/andrey/Desktop/dominations && python3 .claude/hooks/test_result_tracker.py"
           }
         ]
       }
@@ -37,11 +37,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/workflow_verifier.py"
+            "command": "cd /home/andrey/Desktop/dominations && python3 .claude/hooks/workflow_verifier.py"
           },
           {
             "type": "command",
-            "command": "python3 .claude/hooks/session_reflect.py"
+            "command": "cd /home/andrey/Desktop/dominations && python3 .claude/hooks/session_reflect.py"
           }
         ]
       }

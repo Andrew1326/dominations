@@ -7,13 +7,10 @@ Phase 1: The Architect (Base Building MVP)
 None
 
 ## TODO
-- [ ] Set up Phaser 3 with Isometric Plugin
-- [ ] Implement Grid System (Screen X/Y <-> Grid Row/Col conversion)
-- [ ] Create Building Entities (Town Center, House, Farm)
-- [ ] Implement Placement Logic (collision check, snap to grid)
-- [ ] Save/Load base layout to localStorage (temporary persistence)
+None
 
 ## Done
+- [x] Implement Phase 1: Base Building MVP (see stories/phase1-base-building-mvp.story.md)
 - [x] Project structure setup
 - [x] Claude Code configuration (agents, skills, commands)
 
