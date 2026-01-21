@@ -53,6 +53,7 @@ export class Building extends Phaser.GameObjects.Graphics {
     const height = this.definition.height;
 
     // Calculate isometric diamond dimensions
+    // A width×height building covers (width+height) half-tiles in each isometric direction
     const isoWidth = (width + height) * TILE_WIDTH_HALF;
     const isoHeight = (width + height) * TILE_HEIGHT_HALF;
 

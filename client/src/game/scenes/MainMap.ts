@@ -85,16 +85,18 @@ export class MainMap extends Phaser.Scene {
     this.gridGraphics = this.add.graphics();
 
     // Draw filled grid background
+    // Tiles are drawn centered between grid lines (at row+0.5, col+0.5)
     this.gridGraphics.fillStyle(GRID_FILL_COLOR, 0.3);
 
     for (let row = 0; row < GRID_SIZE; row++) {
       for (let col = 0; col < GRID_SIZE; col++) {
-        const pos = this.gridSystem.gridToScreen(row, col);
+        // Center tile between grid intersections
+        const pos = this.gridSystem.gridToScreen(row + 0.5, col + 0.5);
         this.drawTile(pos.x, pos.y, GRID_FILL_COLOR, 0.3);
       }
     }
 
-    // Draw grid lines
+    // Draw grid lines (pass through grid intersections 0 to GRID_SIZE)
     this.gridGraphics.lineStyle(1, GRID_LINE_COLOR, 0.5);
 
     for (let row = 0; row <= GRID_SIZE; row++) {
@@ -143,7 +145,7 @@ export class MainMap extends Phaser.Scene {
         def.height
       );
 
-      // Get screen position for the building center
+      // Get screen position for the building center (centered over the footprint)
       const centerRow = gridPos.row + def.height / 2;
       const centerCol = gridPos.col + def.width / 2;
       const screenPos = this.gridSystem.gridToScreen(centerRow, centerCol);
@@ -317,7 +319,7 @@ export class MainMap extends Phaser.Scene {
     // Mark grid as occupied
     this.gridSystem.occupy(data.row, data.col, def.width, def.height);
 
-    // Calculate screen position
+    // Calculate screen position (centered over the footprint)
     const centerRow = data.row + def.height / 2;
     const centerCol = data.col + def.width / 2;
     const screenPos = this.gridSystem.gridToScreen(centerRow, centerCol);
@@ -383,7 +385,7 @@ export class MainMap extends Phaser.Scene {
     // Mark grid as occupied
     this.gridSystem.occupy(row, col, def.width, def.height);
 
-    // Calculate screen position
+    // Calculate screen position (centered over the footprint)
     const centerRow = row + def.height / 2;
     const centerCol = col + def.width / 2;
     const screenPos = this.gridSystem.gridToScreen(centerRow, centerCol);
@@ -434,7 +436,7 @@ export class MainMap extends Phaser.Scene {
         // Mark grid as occupied
         this.gridSystem.occupy(data.row, data.col, def.width, def.height);
 
-        // Calculate screen position
+        // Calculate screen position (centered over the footprint)
         const centerRow = data.row + def.height / 2;
         const centerCol = data.col + def.width / 2;
         const screenPos = this.gridSystem.gridToScreen(centerRow, centerCol);
