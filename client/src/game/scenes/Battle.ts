@@ -532,13 +532,7 @@ export class Battle extends Phaser.Scene {
    * Handle click for unit deployment
    */
   private handleDeployClick(pointer: Phaser.Input.Pointer): void {
-    if (!this.room || !this.selectedTroopType) return;
-
-    // Check phase
-    const state = this.room.state;
-    if (state.phase !== 'setup') {
-      return;
-    }
+    if (!this.selectedTroopType) return;
 
     // Check if we have troops remaining
     const remaining = this.remainingTroops.get(this.selectedTroopType) || 0;
@@ -552,14 +546,117 @@ export class Battle extends Phaser.Scene {
 
     // Convert to grid position
     const gridPos = this.screenToGrid(worldPoint.x, worldPoint.y);
+    const row = Math.floor(gridPos.row);
+    const col = Math.floor(gridPos.col);
 
-    // Send deploy message to server
-    this.room.send('deployUnit', {
-      type: 'deployUnit',
-      unitType: this.selectedTroopType,
-      row: Math.floor(gridPos.row),
-      col: Math.floor(gridPos.col),
-    });
+    // Check if position is within grid bounds
+    if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) {
+      this.statusText?.setText('Click inside the grid!');
+      return;
+    }
+
+    // Check if position is in the deploy zone (edges of the grid)
+    if (!this.isInDeployZone(row, col)) {
+      this.statusText?.setText('Deploy troops in the green zones at the edges!');
+      return;
+    }
+
+    // Check if position is too close to any building (must be at least 1 cell away)
+    if (this.isTooCloseToBuilding(row, col)) {
+      this.statusText?.setText('Too close to a building! Keep 1 cell distance.');
+      return;
+    }
+
+    // If connected to room, send deploy message to server
+    if (this.room && this.room.state.phase === 'setup') {
+      this.room.send('deployUnit', {
+        type: 'deployUnit',
+        unitType: this.selectedTroopType,
+        row,
+        col,
+      });
+    } else {
+      // Offline preview mode - just show the unit locally
+      this.deployUnitLocally(this.selectedTroopType, row, col);
+    }
+  }
+
+  /**
+   * Check if a position is in the deploy zone (edges of the grid)
+   */
+  private isInDeployZone(row: number, col: number): boolean {
+    // Top edge
+    if (row < DEPLOY_ZONE_DEPTH) return true;
+    // Bottom edge
+    if (row >= GRID_SIZE - DEPLOY_ZONE_DEPTH) return true;
+    // Left edge
+    if (col < DEPLOY_ZONE_DEPTH) return true;
+    // Right edge
+    if (col >= GRID_SIZE - DEPLOY_ZONE_DEPTH) return true;
+
+    return false;
+  }
+
+  /**
+   * Check if a position is too close to any building (within 1 cell)
+   */
+  private isTooCloseToBuilding(row: number, col: number): boolean {
+    for (const [, container] of this.buildingSprites) {
+      const buildingData = container.getData('buildingData') as BuildingSchema | undefined;
+      if (!buildingData) continue;
+
+      const def = BUILDINGS[buildingData.buildingType as keyof typeof BUILDINGS];
+      if (!def) continue;
+
+      // Check if the unit position is within 1 cell of the building footprint
+      const buildingMinRow = buildingData.row - 1; // 1 cell buffer
+      const buildingMaxRow = buildingData.row + def.height; // 1 cell buffer
+      const buildingMinCol = buildingData.col - 1; // 1 cell buffer
+      const buildingMaxCol = buildingData.col + def.width; // 1 cell buffer
+
+      if (row >= buildingMinRow && row <= buildingMaxRow &&
+          col >= buildingMinCol && col <= buildingMaxCol) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Deploy unit locally (for preview/offline mode)
+   */
+  private deployUnitLocally(unitType: UnitType, row: number, col: number): void {
+    // Decrement troop count
+    const remaining = this.remainingTroops.get(unitType) || 0;
+    if (remaining > 0) {
+      this.remainingTroops.set(unitType, remaining - 1);
+      this.updateTroopButton(unitType);
+    }
+
+    // Create unit visual via unit manager
+    if (this.unitManager) {
+      const unitData: UnitData = {
+        id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: unitType,
+        hp: UNITS[unitType].hp,
+        maxHp: UNITS[unitType].hp,
+        state: 'idle',
+        row,
+        col,
+      };
+      this.unitManager.updateFromServer([...this.getExistingUnitData(), unitData]);
+    }
+
+    this.statusText?.setText(`Deployed ${UNITS[unitType].name} at (${row}, ${col})`);
+  }
+
+  /**
+   * Get existing unit data from unit manager
+   */
+  private getExistingUnitData(): UnitData[] {
+    // This is a simplified version - in a real implementation,
+    // unit manager should track and return its current units
+    return [];
   }
 
   /**
@@ -717,6 +814,9 @@ export class Battle extends Phaser.Scene {
     const pos = gridToScreen(building.row + def.height / 2, building.col + def.width / 2);
 
     const container = this.add.container(pos.x, pos.y);
+
+    // Store building data for validation (e.g., unit placement distance check)
+    container.setData('buildingData', building);
 
     // Building shape - draw as isometric diamond
     const isoWidth = (def.width + def.height) * TILE_WIDTH_HALF;
