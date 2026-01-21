@@ -16,6 +16,8 @@ export interface BuildingData {
   level: number;
   constructionStartedAt?: number;  // Timestamp when construction started
   constructionEndsAt?: number;     // Timestamp when construction completes
+  hp?: number;                     // Current HP (used in combat)
+  maxHp?: number;                  // Max HP (used in combat)
 }
 
 export interface BaseLayout {
@@ -41,8 +43,10 @@ export interface BuildingDefinition {
   color: number;           // Placeholder color until sprites
   maxLevel: number;        // Maximum upgrade level
   buildTime: number;       // Base construction time in seconds
+  hp: number;              // Base HP for combat
   produces?: ResourceType; // Resource this building produces
   productionRate?: number; // Units per hour at level 1
+  isDefensive?: boolean;   // True for walls, towers, etc.
 }
 
 // ============================================================
@@ -132,3 +136,128 @@ export type ServerMessage =
   | ErrorMessage
   | BuildingPlacedMessage
   | ConstructionCompleteMessage;
+
+// ============================================================
+// Unit & Combat Types
+// ============================================================
+
+export type UnitType = 'warrior' | 'archer' | 'cavalry' | 'catapult';
+
+export type UnitState = 'idle' | 'moving' | 'attacking' | 'dead';
+
+export interface UnitDefinition {
+  type: UnitType;
+  name: string;
+  hp: number;              // Base health points
+  damage: number;          // Base damage per attack
+  attackSpeed: number;     // Attacks per second
+  range: number;           // Attack range in grid tiles
+  moveSpeed: number;       // Tiles per second
+  trainingTime: number;    // Seconds to train
+  preferredTarget?: 'building' | 'defensive' | 'any';  // AI targeting preference
+  color: number;           // Placeholder color until sprites
+}
+
+export interface UnitData {
+  id: string;
+  type: UnitType;
+  hp: number;              // Current HP
+  maxHp: number;
+  state: UnitState;
+  row: number;             // Current grid position (fractional for smooth movement)
+  col: number;
+  targetId?: string;       // ID of building/unit being targeted
+  targetRow?: number;      // Destination grid position
+  targetCol?: number;
+}
+
+export interface TroopSlot {
+  type: UnitType;
+  count: number;
+}
+
+// ============================================================
+// Battle Types
+// ============================================================
+
+export type BattlePhase = 'setup' | 'running' | 'ended';
+
+export interface BattleState {
+  id: string;
+  phase: BattlePhase;
+  attackerId: string;
+  defenderId: string;
+  defenderBase: BuildingData[];  // Snapshot of defender's base
+  units: UnitData[];             // All active units
+  tick: number;                  // Current simulation tick
+  destructionPercent: number;    // 0-100%
+  loot: Resources;               // Resources gained by attacker
+  startTime: number;
+  endTime?: number;
+}
+
+export interface BattleResult {
+  battleId: string;
+  attackerId: string;
+  defenderId: string;
+  destructionPercent: number;
+  stars: number;                 // 0-3 stars based on destruction
+  loot: Resources;
+  duration: number;              // Battle duration in seconds
+}
+
+// ============================================================
+// Battle Network Messages (Client -> Server)
+// ============================================================
+
+export interface StartBattleMessage {
+  type: 'startBattle';
+  defenderId: string;
+  troops: TroopSlot[];
+}
+
+export interface DeployUnitMessage {
+  type: 'deployUnit';
+  unitType: UnitType;
+  row: number;
+  col: number;
+}
+
+export interface EndBattleMessage {
+  type: 'endBattle';
+}
+
+export type BattleClientMessage =
+  | StartBattleMessage
+  | DeployUnitMessage
+  | EndBattleMessage;
+
+// ============================================================
+// Battle Network Messages (Server -> Client)
+// ============================================================
+
+export interface BattleStartedMessage {
+  type: 'battleStarted';
+  battleId: string;
+  defenderBase: BuildingData[];
+  defenderUsername: string;
+}
+
+export interface BattleTickMessage {
+  type: 'battleTick';
+  tick: number;
+  units: UnitData[];
+  buildings: BuildingData[];     // Updated building HP
+  destructionPercent: number;
+}
+
+export interface BattleEndedMessage {
+  type: 'battleEnded';
+  result: BattleResult;
+}
+
+export type BattleServerMessage =
+  | BattleStartedMessage
+  | BattleTickMessage
+  | BattleEndedMessage
+  | ErrorMessage;

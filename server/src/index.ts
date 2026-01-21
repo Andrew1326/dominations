@@ -7,6 +7,7 @@ import express from 'express';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { GameRoom } from './rooms/GameRoom';
+import { BattleRoom } from './rooms/BattleRoom';
 import { connectDatabase } from './db';
 
 const app = express();
@@ -32,8 +33,9 @@ async function main() {
     transport: new WebSocketTransport({ server: httpServer }),
   });
 
-  // Register game room
+  // Register game rooms
   gameServer.define('game', GameRoom);
+  gameServer.define('battle', BattleRoom);
 
   // Start listening
   httpServer.listen(port, () => {
