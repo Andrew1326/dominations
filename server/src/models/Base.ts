@@ -19,6 +19,10 @@ export interface IBuilding {
 // Base document interface
 export interface IBase extends Document {
   owner: Types.ObjectId;
+  age: string;
+  nation: string | null;
+  ageAdvanceStartedAt: Date | null;
+  ageAdvanceEndsAt: Date | null;
   resources: Resources;
   resourcesLastUpdated: Date;
   buildings: IBuilding[];
@@ -36,7 +40,13 @@ const BuildingSchema = new Schema<IBuilding>({
   type: {
     type: String,
     required: true,
-    enum: ['townCenter', 'house', 'farm', 'goldMine', 'oilWell'],
+    enum: [
+      'townCenter', 'house', 'farm', 'goldMine', 'oilWell',
+      'barracks', 'wall', 'tower', 'storage',
+      'blacksmith', 'market', 'temple', 'library',
+      'stable', 'castle', 'university', 'factory',
+      'airfield', 'dataCentre',
+    ],
   },
   row: {
     type: Number,
@@ -70,6 +80,30 @@ const BaseSchema = new Schema<IBase>({
     ref: 'User',
     required: true,
     unique: true,
+  },
+  age: {
+    type: String,
+    default: 'stone',
+    enum: [
+      'stone', 'bronze', 'iron', 'classical', 'medieval',
+      'gunpowder', 'enlightenment', 'industrial', 'modern', 'digital',
+    ],
+  },
+  nation: {
+    type: String,
+    default: null,
+    enum: [
+      null, 'romans', 'greeks', 'egyptians', 'chinese',
+      'japanese', 'vikings', 'british', 'persians',
+    ],
+  },
+  ageAdvanceStartedAt: {
+    type: Date,
+    default: null,
+  },
+  ageAdvanceEndsAt: {
+    type: Date,
+    default: null,
   },
   resources: {
     food: {

@@ -6,7 +6,58 @@
 // Building Types
 // ============================================================
 
-export type BuildingType = 'townCenter' | 'house' | 'farm' | 'goldMine' | 'oilWell';
+export type BuildingType =
+  | 'townCenter' | 'house' | 'farm' | 'goldMine' | 'oilWell'
+  | 'barracks' | 'wall' | 'tower' | 'storage'
+  | 'blacksmith' | 'market' | 'temple' | 'library'
+  | 'stable' | 'castle' | 'university' | 'factory'
+  | 'airfield' | 'dataCentre';
+
+// ============================================================
+// Age & Nation Types
+// ============================================================
+
+export type Age =
+  | 'stone' | 'bronze' | 'iron' | 'classical' | 'medieval'
+  | 'gunpowder' | 'enlightenment' | 'industrial' | 'modern' | 'digital';
+
+export type Nation =
+  | 'romans' | 'greeks' | 'egyptians' | 'chinese'
+  | 'japanese' | 'vikings' | 'british' | 'persians';
+
+export type NationBonusType =
+  | 'resourceProduction' | 'buildSpeed' | 'unitTraining'
+  | 'combatDamage' | 'buildingHp' | 'lootBonus' | 'storageCapacity';
+
+export interface NationBonus {
+  type: NationBonusType;
+  value: number;        // Percentage modifier (e.g., 10 = +10%)
+  description: string;
+}
+
+export interface NationDefinition {
+  id: Nation;
+  name: string;
+  description: string;
+  colorPalette: {
+    primary: string;    // Hex color
+    secondary: string;
+    accent: string;
+  };
+  bonuses: NationBonus[];
+}
+
+export interface AgeDefinition {
+  id: Age;
+  name: string;
+  era: string;           // Display category (e.g., "Ancient", "Medieval", "Modern")
+  order: number;         // 0-9 for sorting
+  unlocksBuildings: BuildingType[];
+  advanceCost: ResourceCost;
+  advanceTime: number;   // Seconds to advance to this age
+  resourceCapMultiplier: number;   // Multiplied against base resource cap
+  buildingStatMultiplier: number;  // HP/damage scale factor for this age
+}
 
 export interface BuildingData {
   id: string;
@@ -47,6 +98,7 @@ export interface BuildingDefinition {
   produces?: ResourceType; // Resource this building produces
   productionRate?: number; // Units per hour at level 1
   isDefensive?: boolean;   // True for walls, towers, etc.
+  availableFrom?: Age;     // First age this building is available (default: 'stone')
 }
 
 // ============================================================
