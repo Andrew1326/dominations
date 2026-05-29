@@ -146,6 +146,15 @@ export async function getOrCreateGuestUser(guestId: string): Promise<AuthResult>
       return { success: false, error: 'Failed to load base' };
     }
 
+    // Dev convenience: ensure existing players also have the (currently generous)
+    // starting resources so they can build/test freely. Disabled in production.
+    if (process.env.NODE_ENV !== 'production') {
+      base.resources.gold = Math.max(base.resources.gold, STARTING_RESOURCES.gold);
+      base.resources.food = Math.max(base.resources.food, STARTING_RESOURCES.food);
+      base.resources.oil = Math.max(base.resources.oil, STARTING_RESOURCES.oil);
+      await base.save();
+    }
+
     return { success: true, user, base };
   } catch (error) {
     console.error('Guest user error:', error);

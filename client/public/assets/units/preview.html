@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ranged Shooter — Animation Preview</title>
+<style>
+  body { background: #2a2a2a; color: #eee; font-family: monospace; margin: 20px; }
+  h1 { font-size: 18px; }
+  .row { display: flex; gap: 30px; flex-wrap: wrap; margin-bottom: 30px; }
+  .anim-box { text-align: center; }
+  .anim-box canvas { border: 1px solid #444; background: #1a1a1a; image-rendering: pixelated; }
+  .label { margin-top: 4px; font-size: 12px; color: #999; }
+  .controls { margin: 15px 0; }
+  .controls button { background: #444; color: #eee; border: none; padding: 6px 14px; margin: 0 4px; cursor: pointer; font-family: monospace; }
+  .controls button:hover { background: #666; }
+  .controls button.active { background: #e87020; color: #fff; }
+  h2 { font-size: 14px; margin: 20px 0 8px; color: #ccc; border-bottom: 1px solid #444; padding-bottom: 4px; }
+</style>
+</head>
+<body>
+<h1>Ranged Shooter — Animation Preview</h1>
+
+<div class="controls">
+  Speed:
+  <button onclick="setFPS(6)">6 fps</button>
+  <button onclick="setFPS(10)" class="active" id="btn10">10 fps</button>
+  <button onclick="setFPS(15)">15 fps</button>
+  <button onclick="setFPS(24)">24 fps</button>
+  &nbsp; Scale:
+  <button onclick="setScale(1)">1x</button>
+  <button onclick="setScale(2)" class="active" id="btnS2">2x</button>
+  <button onclick="setScale(3)">3x</button>
+</div>
+
+<h2>Walk Cycle (all 8 directions)</h2>
+<div class="row" id="walk-row"></div>
+
+<h2>Shoot (all 8 directions)</h2>
+<div class="row" id="shoot-row"></div>
+
+<script>
+const DIRS = ['S','SW','W','NW','N','NE','E','SE'];
+let fps = 10;
+let scale = 2;
+let anims = [];
+
+function setFPS(f) {
+  fps = f;
+  document.querySelectorAll('.controls button').forEach(b => {
+    if (b.textContent.includes('fps')) b.classList.remove('active');
+  });
+  event.target.classList.add('active');
+}
+
+function setScale(s) {
+  scale = s;
+  document.querySelectorAll('.controls button').forEach(b => {
+    if (b.textContent.includes('x')) b.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  anims.forEach(a => {
+    a.canvas.width = a.fw * scale;
+    a.canvas.height = a.fh * scale;
+  });
+}
+
+function loadSheet(src, metaSrc) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      fetch(metaSrc).then(r => r.json()).then(meta => {
+        resolve({ img, meta });
+      });
+    };
+    img.src = src;
+  });
+}
+
+function createAnimBox(container, sheet, dirIdx) {
+  const { img, meta } = sheet;
+  const fw = meta.frameWidth;
+  const fh = meta.frameHeight;
+  const frames = meta.framesPerDirection;
+
+  const box = document.createElement('div');
+  box.className = 'anim-box';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = fw * scale;
+  canvas.height = fh * scale;
+  box.appendChild(canvas);
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = DIRS[dirIdx];
+  box.appendChild(label);
+
+  container.appendChild(box);
+
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const anim = { canvas, ctx, img, fw, fh, frames, dirIdx, frame: 0, lastTime: 0 };
+  anims.push(anim);
+  return anim;
+}
+
+let lastTick = 0;
+function animate(time) {
+  const elapsed = time - lastTick;
+  const interval = 1000 / fps;
+
+  if (elapsed >= interval) {
+    lastTick = time - (elapsed % interval);
+
+    for (const a of anims) {
+      a.ctx.clearRect(0, 0, a.canvas.width, a.canvas.height);
+      a.canvas.width = a.fw * scale;
+      a.canvas.height = a.fh * scale;
+      a.ctx.imageSmoothingEnabled = false;
+
+      const sx = a.frame * a.fw;
+      const sy = a.dirIdx * a.fh;
+      a.ctx.drawImage(a.img, sx, sy, a.fw, a.fh, 0, 0, a.fw * scale, a.fh * scale);
+
+      a.frame = (a.frame + 1) % a.frames;
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+async function init() {
+  const walkSheet = await loadSheet('rangedShooter_move.png', 'rangedShooter_move.json');
+  const shootSheet = await loadSheet('rangedShooter_shoot.png', 'rangedShooter_shoot.json');
+
+  const walkRow = document.getElementById('walk-row');
+  const shootRow = document.getElementById('shoot-row');
+
+  for (let d = 0; d < 8; d++) {
+    createAnimBox(walkRow, walkSheet, d);
+    createAnimBox(shootRow, shootSheet, d);
+  }
+
+  requestAnimationFrame(animate);
+}
+
+init();
+</script>
+</body>
+</html>

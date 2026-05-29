@@ -1,0 +1,20 @@
+{
+  "unit": "rangedShooter",
+  "animation": "move",
+  "frameWidth": 128,
+  "frameHeight": 128,
+  "framesPerDirection": 8,
+  "directions": 8,
+  "directionOrder": [
+    "S",
+    "SW",
+    "W",
+    "NW",
+    "N",
+    "NE",
+    "E",
+    "SE"
+  ],
+  "sheetWidth": 1024,
+  "sheetHeight": 1024
+}

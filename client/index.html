@@ -111,33 +111,180 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
+      .demolish-btn {
+        border-color: #f39c12;
+        background: #2a241a;
+        color: #f39c12;
+      }
+      .demolish-btn:hover {
+        background: #f39c12;
+        color: #fff;
+      }
+      .demolish-btn.active {
+        background: #f39c12;
+        color: #fff;
+        box-shadow: 0 0 8px #f39c12;
+      }
+
+      /* ---- Building catalog menu ---- */
+      #building-menu {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #building-menu.hidden {
+        display: none;
+      }
+      #building-menu-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+      }
+      #building-menu-panel {
+        position: relative;
+        width: min(900px, 90vw);
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        background: #14142b;
+        border: 2px solid #444;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+      }
+      #building-menu-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid #333;
+      }
+      #building-menu-header h2 {
+        color: #fff;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      #building-menu-close {
+        background: none;
+        border: none;
+        color: #aaa;
+        font-size: 28px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0 6px;
+      }
+      #building-menu-close:hover {
+        color: #fff;
+      }
+      #building-menu-grid {
+        padding: 16px 20px 24px;
+        overflow-y: auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 12px;
+      }
+      .age-header {
+        grid-column: 1 / -1;
+        color: #8a8aff;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #2a2a4e;
+      }
+      .building-card {
+        background: #1a1a2e;
+        border: 2px solid #333;
+        border-radius: 10px;
+        padding: 10px;
+        cursor: pointer;
+        transition: all 0.15s;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .building-card:hover {
+        border-color: #4CAF50;
+        background: #20203a;
+        transform: translateY(-2px);
+      }
+      .building-card.selected {
+        border-color: #4CAF50;
+        box-shadow: 0 0 8px #4CAF50;
+      }
+      .building-card.unaffordable {
+        opacity: 0.55;
+      }
+      .building-card .thumb {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        border-radius: 8px;
+        margin-bottom: 6px;
+        image-rendering: pixelated;
+      }
+      .building-card .swatch {
+        width: 72px;
+        height: 72px;
+        border-radius: 8px;
+        margin-bottom: 6px;
+      }
+      .building-card .b-name {
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .building-card .b-size {
+        color: #888;
+        font-size: 11px;
+        margin: 2px 0 6px;
+      }
+      .building-card .b-cost {
+        color: #ddd;
+        font-size: 12px;
+      }
+      .building-card.unaffordable .b-cost {
+        color: #e74c3c;
+      }
     </style>
   </head>
   <body>
     <div id="ui-overlay">
-      <button class="building-btn" data-building="townCenter">
-        <span class="color-dot" style="background: #8B4513;"></span>
-        Town Center (3x3)
-      </button>
-      <button class="building-btn" data-building="house">
-        <span class="color-dot" style="background: #4169E1;"></span>
-        House (2x2)
-      </button>
-      <button class="building-btn" data-building="farm">
-        <span class="color-dot" style="background: #228B22;"></span>
-        Farm (2x2)
+      <button id="add-building-btn" class="building-btn">
+        <span class="color-dot" style="background: #4CAF50;"></span>
+        Add Building
       </button>
       <div id="resource-display">
         <span>Food: <span id="food-value">0</span></span>
         <span>Gold: <span id="gold-value">0</span></span>
         <span>Oil: <span id="oil-value">0</span></span>
       </div>
+      <button id="demolish-btn" class="action-btn demolish-btn">Demolish</button>
       <button id="attack-btn" class="action-btn">Attack</button>
     </div>
     <div id="status-display"></div>
+
+    <!-- Building catalog menu (populated by MainMap) -->
+    <div id="building-menu" class="hidden">
+      <div id="building-menu-backdrop"></div>
+      <div id="building-menu-panel">
+        <div id="building-menu-header">
+          <h2>Add Building</h2>
+          <button id="building-menu-close" aria-label="Close">&times;</button>
+        </div>
+        <div id="building-menu-grid"></div>
+      </div>
+    </div>
+
     <div id="game-container"></div>
     <div id="instructions">
-      Click a building type above, then click on the grid to place. Layout saves automatically.
+      Click Add Building to open the catalog, pick a building, then click the grid to place it. Click Demolish, then a building, to remove it (right-click or Esc to cancel). Layout saves automatically.
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -7,6 +7,7 @@ import type { BuildingType } from '@shared/types';
 import { IBuilding } from '../src/models/Base';
 import {
   getBuildingCost,
+  getBuildingRefund,
   getConstructionTime,
   isWithinBounds,
   checkOverlap,
@@ -17,7 +18,7 @@ import {
   getRemainingConstructionTime,
   processCompletedConstructions,
 } from '../src/mechanics/ConstructionManager';
-import { GRID_SIZE } from '@shared/constants';
+import { GRID_SIZE, BUILDING_REFUND_RATE, BUILDING_COSTS, BASE_RESOURCE_CAP, STARTING_RESOURCES } from '@shared/constants';
 
 // Helper to create test buildings
 function createBuilding(
@@ -53,10 +54,56 @@ describe('ConstructionManager', () => {
       expect(costL3.gold).toBe(Math.floor(150 * 1.5 * 1.5));
     });
 
-    it('handles buildings with multiple resource costs', () => {
+    it('costs gold only (no food or oil)', () => {
       const cost = getBuildingCost('townCenter');
       expect(cost.gold).toBe(1000);
-      expect(cost.food).toBe(500);
+      expect(cost.food).toBeUndefined();
+      expect(cost.oil).toBeUndefined();
+    });
+
+    it('every building costs gold only', () => {
+      for (const [type, cost] of Object.entries(BUILDING_COSTS)) {
+        expect(cost.gold, `${type} should have a gold cost`).toBeGreaterThan(0);
+        expect(cost.food, `${type} should not cost food`).toBeUndefined();
+        expect(cost.oil, `${type} should not cost oil`).toBeUndefined();
+      }
+    });
+
+    it('resource cap is at least the starting grant (so generation never clamps below start)', () => {
+      expect(BASE_RESOURCE_CAP.food).toBeGreaterThanOrEqual(STARTING_RESOURCES.food);
+      expect(BASE_RESOURCE_CAP.gold).toBeGreaterThanOrEqual(STARTING_RESOURCES.gold);
+      expect(BASE_RESOURCE_CAP.oil).toBeGreaterThanOrEqual(STARTING_RESOURCES.oil);
+    });
+  });
+
+  describe('getBuildingRefund', () => {
+    it('refunds the configured fraction of a level 1 cost', () => {
+      const cost = getBuildingCost('farm', 1);
+      const refund = getBuildingRefund('farm', 1);
+      expect(refund.gold).toBe(Math.floor((cost.gold ?? 0) * BUILDING_REFUND_RATE));
+      expect(refund.food).toBe(0);
+      expect(refund.oil).toBe(0);
+    });
+
+    it('refunds all resource types a building cost', () => {
+      const cost = getBuildingCost('townCenter', 1);
+      const refund = getBuildingRefund('townCenter', 1);
+      expect(refund.gold).toBe(Math.floor((cost.gold ?? 0) * BUILDING_REFUND_RATE));
+      expect(refund.food).toBe(Math.floor((cost.food ?? 0) * BUILDING_REFUND_RATE));
+    });
+
+    it('refunds the cumulative cost across upgrade levels', () => {
+      const cumulativeGold =
+        (getBuildingCost('farm', 1).gold ?? 0) + (getBuildingCost('farm', 2).gold ?? 0);
+      const refund = getBuildingRefund('farm', 2);
+      expect(refund.gold).toBe(Math.floor(cumulativeGold * BUILDING_REFUND_RATE));
+    });
+
+    it('never refunds more than was spent', () => {
+      const cost = getBuildingCost('house', 1);
+      const refund = getBuildingRefund('house', 1);
+      expect(refund.gold).toBeLessThanOrEqual(cost.gold ?? 0);
+      expect(refund.food).toBeLessThanOrEqual(cost.food ?? Infinity);
     });
   });
 
@@ -132,6 +179,30 @@ describe('ConstructionManager', () => {
       const result = validatePlacement('farm', 5, 5, existing);
       expect(result.valid).toBe(false);
       expect(result.error).toBe('Position overlaps with existing building');
+    });
+
+    it('rejects an ordinary building placed flush against another', () => {
+      const existing = [createBuilding('farm', 5, 5)]; // covers 5-6, 5-6
+      const result = validatePlacement('house', 5, 7, existing); // flush to the right
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('Too close to another building');
+    });
+
+    it('allows an ordinary building with a 1-cell gap', () => {
+      const existing = [createBuilding('farm', 5, 5)];
+      expect(validatePlacement('house', 5, 8, existing).valid).toBe(true);
+    });
+
+    it('allows a wall flush against a building (fences are exempt)', () => {
+      const existing = [createBuilding('farm', 5, 5)];
+      expect(validatePlacement('wall', 5, 7, existing).valid).toBe(true); // flush right
+      expect(validatePlacement('wall', 7, 5, existing).valid).toBe(true); // flush below
+    });
+
+    it('allows a building flush against a wall, and walls flush together', () => {
+      const wall = [createBuilding('wall', 5, 5)];
+      expect(validatePlacement('farm', 6, 5, wall).valid).toBe(true); // building touching a wall
+      expect(validatePlacement('wall', 5, 6, wall).valid).toBe(true); // wall touching a wall (fence line)
     });
   });
 

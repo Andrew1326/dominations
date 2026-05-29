@@ -4,10 +4,10 @@
 
 import { Room, Client } from '@colyseus/core';
 import { Schema, MapSchema, type } from '@colyseus/schema';
-import type { PlaceBuildingMessage, ClientMessage, BuildingType, MatchFoundMessage, NoMatchFoundMessage } from '@shared/types';
+import type { PlaceBuildingMessage, RemoveBuildingMessage, ClientMessage, BuildingType, MatchFoundMessage, NoMatchFoundMessage } from '@shared/types';
 import { getOrCreateGuestUser, saveUserBase } from '../services/AuthService';
 import { Base, IBase, IBuilding } from '../models/Base';
-import { startConstruction } from '../mechanics/ConstructionManager';
+import { startConstruction, getBuildingRefund } from '../mechanics/ConstructionManager';
 import { updateResources } from '../mechanics/ResourceCalculator';
 import { findOpponent } from '../mechanics/MatchmakingService';
 
@@ -186,6 +186,10 @@ export class GameRoom extends Room<GameState> {
         this.handlePlaceBuilding(client, player, message as PlaceBuildingMessage);
         break;
 
+      case 'removeBuilding':
+        this.handleRemoveBuilding(client, player, message as RemoveBuildingMessage);
+        break;
+
       case 'collectResources':
         this.handleCollectResources(client, player);
         break;
@@ -260,6 +264,43 @@ export class GameRoom extends Room<GameState> {
 
     console.log(`Building ${result.building!.id} placed at (${result.building!.row}, ${result.building!.col})`);
     console.log(`  Resources remaining: food=${player.resources.food}, gold=${player.resources.gold}`);
+  }
+
+  private handleRemoveBuilding(
+    client: Client,
+    player: PlayerSchema,
+    message: RemoveBuildingMessage
+  ): void {
+    const building = player.buildings.get(message.buildingId);
+
+    if (!building) {
+      client.send('error', {
+        type: 'error',
+        code: 'REMOVE_FAILED',
+        message: 'Building not found',
+      });
+      console.log(`Remove failed: building ${message.buildingId} not found`);
+      return;
+    }
+
+    // Calculate refund based on the building's current level
+    const refund = getBuildingRefund(building.buildingType as BuildingType, building.level);
+
+    // Remove the building from player state (syncs to client automatically)
+    player.buildings.delete(message.buildingId);
+
+    // Credit the refund
+    player.resources.food += refund.food;
+    player.resources.gold += refund.gold;
+    player.resources.oil += refund.oil;
+
+    client.send('buildingRemoved', {
+      type: 'buildingRemoved',
+      buildingId: message.buildingId,
+      refund,
+    });
+
+    console.log(`Building ${message.buildingId} removed. Refund: food=${refund.food}, gold=${refund.gold}, oil=${refund.oil}`);
   }
 
   private handleCollectResources(client: Client, player: PlayerSchema): void {

@@ -128,6 +128,12 @@ class NetworkService {
       }
     });
 
+    // Removal is reflected through state sync (buildings.onRemove); this
+    // handler just surfaces the refund and avoids an "unhandled message" warning.
+    this.room.onMessage('buildingRemoved', (message: { buildingId: string; refund: Resources }) => {
+      console.log('Building removed:', message.buildingId, 'refund:', message.refund);
+    });
+
     // Matchmaking messages
     this.room.onMessage('matchFound', (message: MatchFoundMessage) => {
       console.log('Match found:', message.opponent.username);
@@ -188,6 +194,21 @@ class NetworkService {
       buildingType,
       row,
       col,
+    });
+  }
+
+  /**
+   * Send remove building request to server
+   */
+  removeBuilding(buildingId: string): void {
+    if (!this.room) {
+      console.error('Not connected to server');
+      return;
+    }
+
+    this.room.send('removeBuilding', {
+      type: 'removeBuilding',
+      buildingId,
     });
   }
 

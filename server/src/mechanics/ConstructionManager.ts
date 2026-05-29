@@ -10,11 +10,13 @@ import { IBuilding } from '../models/Base';
 import {
   BUILDINGS,
   BUILDING_COSTS,
+  BUILDING_REFUND_RATE,
   GRID_SIZE,
   BUILD_TIME_MULTIPLIER,
   UPGRADE_COST_MULTIPLIER,
 } from '@shared/constants';
 import { canAfford, deductResources } from './ResourceCalculator';
+import { findSpacingConflict } from '@shared/placement';
 
 export interface PlacementValidation {
   valid: boolean;
@@ -43,6 +45,29 @@ export function getBuildingCost(buildingType: BuildingType, level: number = 1): 
     food: baseCost.food ? Math.floor(baseCost.food * multiplier) : undefined,
     gold: baseCost.gold ? Math.floor(baseCost.gold * multiplier) : undefined,
     oil: baseCost.oil ? Math.floor(baseCost.oil * multiplier) : undefined,
+  };
+}
+
+/**
+ * Get the resources refunded when a building is demolished.
+ *
+ * Refunds BUILDING_REFUND_RATE of the cumulative cost invested up to the
+ * building's current level (base build + every upgrade), rounded down.
+ */
+export function getBuildingRefund(buildingType: BuildingType, level: number = 1): Resources {
+  const refund: Resources = { food: 0, gold: 0, oil: 0 };
+
+  for (let lvl = 1; lvl <= level; lvl++) {
+    const cost = getBuildingCost(buildingType, lvl);
+    refund.food += cost.food ?? 0;
+    refund.gold += cost.gold ?? 0;
+    refund.oil += cost.oil ?? 0;
+  }
+
+  return {
+    food: Math.floor(refund.food * BUILDING_REFUND_RATE),
+    gold: Math.floor(refund.gold * BUILDING_REFUND_RATE),
+    oil: Math.floor(refund.oil * BUILDING_REFUND_RATE),
   };
 }
 
@@ -127,6 +152,17 @@ export function validatePlacement(
   // Check overlap
   if (checkOverlap(row, col, definition.width, definition.height, existingBuildings)) {
     return { valid: false, error: 'Position overlaps with existing building' };
+  }
+
+  // Check spacing: ordinary buildings need a 1-cell gap; fences are exempt
+  const spacingConflict = findSpacingConflict(
+    buildingType,
+    row,
+    col,
+    existingBuildings.map((b) => ({ type: b.type as BuildingType, row: b.row, col: b.col }))
+  );
+  if (spacingConflict) {
+    return { valid: false, error: 'Too close to another building' };
   }
 
   return { valid: true };

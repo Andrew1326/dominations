@@ -12,6 +12,7 @@ import {
   loginUser,
   getOrCreateGuestUser,
 } from '../src/services/AuthService';
+import { STARTING_RESOURCES } from '@shared/constants';
 
 let mongoServer: MongoMemoryServer;
 
@@ -40,8 +41,8 @@ describe('AuthService', () => {
       expect(result.user).toBeDefined();
       expect(result.user!.username).toBe('newuser');
       expect(result.base).toBeDefined();
-      expect(result.base!.resources.food).toBe(500);
-      expect(result.base!.resources.gold).toBe(500);
+      expect(result.base!.resources.food).toBe(STARTING_RESOURCES.food);
+      expect(result.base!.resources.gold).toBe(STARTING_RESOURCES.gold);
     });
 
     it('fails when username is taken', async () => {
@@ -63,9 +64,9 @@ describe('AuthService', () => {
     it('creates a base with starting resources for new user', async () => {
       const result = await registerUser('resourceuser', 'res@example.com', 'pass');
 
-      expect(result.base!.resources.food).toBe(500);
-      expect(result.base!.resources.gold).toBe(500);
-      expect(result.base!.resources.oil).toBe(0);
+      expect(result.base!.resources.food).toBe(STARTING_RESOURCES.food);
+      expect(result.base!.resources.gold).toBe(STARTING_RESOURCES.gold);
+      expect(result.base!.resources.oil).toBe(STARTING_RESOURCES.oil);
       expect(result.base!.buildings).toHaveLength(0);
     });
   });
@@ -134,15 +135,32 @@ describe('AuthService', () => {
     });
 
     it('preserves guest base data between sessions', async () => {
-      // Create guest and modify their base
+      // Create guest and modify their base (above the starting grant so the
+      // dev top-up leaves it untouched)
+      const richGold = STARTING_RESOURCES.gold + 12345;
       const result1 = await getOrCreateGuestUser('persistent_guest');
-      result1.base!.resources.gold = 1000;
+      result1.base!.resources.gold = richGold;
       await result1.base!.save();
 
       // Get guest again
       const result2 = await getOrCreateGuestUser('persistent_guest');
 
-      expect(result2.base!.resources.gold).toBe(1000);
+      expect(result2.base!.resources.gold).toBe(richGold);
+    });
+
+    it('tops up an existing guest below the starting grant (dev convenience)', async () => {
+      // Simulate a guest who has spent down their resources
+      const result1 = await getOrCreateGuestUser('poor_guest');
+      result1.base!.resources.gold = 10;
+      result1.base!.resources.food = 10;
+      result1.base!.resources.oil = 0;
+      await result1.base!.save();
+
+      const result2 = await getOrCreateGuestUser('poor_guest');
+
+      expect(result2.base!.resources.gold).toBe(STARTING_RESOURCES.gold);
+      expect(result2.base!.resources.food).toBe(STARTING_RESOURCES.food);
+      expect(result2.base!.resources.oil).toBe(STARTING_RESOURCES.oil);
     });
   });
 });

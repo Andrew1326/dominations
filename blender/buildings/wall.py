@@ -708,3 +708,38 @@ def build_wall(materials, age='medieval'):
     """Build a Wall segment with geometry appropriate for the given age."""
     builder = AGE_BUILDERS.get(age, _build_medieval)
     builder(materials)
+
+
+def build_simple_wall(materials, age='medieval'):
+    """A clean, symmetric, seamlessly-tileable wall segment.
+
+    Spans exactly one tile (2.0 units) along Y with no front/back asymmetry, and
+    evenly-spaced merlons (0.4 apart) positioned so the crenellation pattern
+    continues unbroken across the seam between adjacent segments. Designed so a
+    run of these reads as one straight, continuous battlement.
+    """
+    m = materials
+    Z = 0.0
+    half_len = 1.0      # full length 2.0 == one tile
+    half_th = 0.20      # wall ~0.40 thick
+    body_h = 0.62
+
+    # Main wall body — full tile length, centred, symmetric
+    bmesh_box("WallBody", (half_th * 2, half_len * 2, body_h), (0, 0, Z + body_h / 2), m['stone'], bevel=0.02)
+
+    # A couple of subtle stone-course lines for texture
+    for z_off in [body_h * 0.4, body_h * 0.75]:
+        bmesh_box("Course_%.2f" % z_off, (half_th * 2 + 0.005, half_len * 2, 0.012),
+                  (0, 0, Z + z_off), m['stone_dark'])
+
+    # Continuous coping cap (slight overhang both sides), full length
+    cap_z = Z + body_h
+    bmesh_box("Cap", (half_th * 2 + 0.10, half_len * 2, 0.06), (0, 0, cap_z + 0.03), m['stone_trim'])
+
+    # Crenellations — spaced 0.4 so they tile seamlessly across segment seams
+    bz = cap_z + 0.06
+    merlon_h = 0.20
+    merlon_w = 0.16
+    for my in (-0.8, -0.4, 0.0, 0.4, 0.8):
+        bmesh_box("Merlon_%.1f" % my, (half_th * 2 - 0.04, merlon_w, merlon_h),
+                  (0, my, bz + merlon_h / 2), m['stone'])

@@ -99,6 +99,7 @@ export interface BuildingDefinition {
   productionRate?: number; // Units per hour at level 1
   isDefensive?: boolean;   // True for walls, towers, etc.
   availableFrom?: Age;     // First age this building is available (default: 'stone')
+  allowAdjacent?: boolean; // Fences/walls: may be placed flush (skip the 1-cell spacing rule)
 }
 
 // ============================================================
@@ -152,10 +153,16 @@ export interface CancelConstructionMessage {
   buildingId: string;
 }
 
+export interface RemoveBuildingMessage {
+  type: 'removeBuilding';
+  buildingId: string;
+}
+
 export type ClientMessage =
   | PlaceBuildingMessage
   | CollectResourcesMessage
-  | CancelConstructionMessage;
+  | CancelConstructionMessage
+  | RemoveBuildingMessage;
 
 // ============================================================
 // Network Messages (Server -> Client)
@@ -183,11 +190,18 @@ export interface ConstructionCompleteMessage {
   buildingId: string;
 }
 
+export interface BuildingRemovedMessage {
+  type: 'buildingRemoved';
+  buildingId: string;
+  refund: Resources;
+}
+
 export type ServerMessage =
   | StateUpdateMessage
   | ErrorMessage
   | BuildingPlacedMessage
-  | ConstructionCompleteMessage;
+  | ConstructionCompleteMessage
+  | BuildingRemovedMessage;
 
 // ============================================================
 // Unit & Combat Types

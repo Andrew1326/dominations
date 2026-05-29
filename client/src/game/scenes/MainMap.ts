@@ -18,9 +18,17 @@ import {
   GRID_LINE_COLOR,
   GRID_FILL_COLOR,
   BUILDINGS,
+  BUILDING_COSTS,
   STORAGE_KEY,
 } from '@shared/constants';
 import { networkService, ServerState } from '../../services/NetworkService';
+import { getBuildingCatalog, formatCost, getBuildingTexture } from '../ui/buildingCatalog';
+import { findSpacingConflict } from '@shared/placement';
+import { wallVariant, cellKey } from '../systems/wallTiling';
+
+// Phaser texture keys for the two wall orientations (autotiling)
+const WALL_TEXTURE_ROW = 'building-wall';
+const WALL_TEXTURE_COL = 'building-wall-b';
 
 export class MainMap extends Phaser.Scene {
   private gridSystem!: GridSystem;
@@ -30,6 +38,7 @@ export class MainMap extends Phaser.Scene {
   private ghostBuilding: GhostBuilding | null = null;
   private selectedBuildingType: BuildingType | null = null;
   private lastValidPosition: { row: number; col: number; valid: boolean } | null = null;
+  private demolishMode = false;
 
   // Online/offline mode
   private isOnline = false;
@@ -43,6 +52,44 @@ export class MainMap extends Phaser.Scene {
 
   constructor() {
     super({ key: 'MainMap' });
+  }
+
+  /**
+   * Preload building sprite textures (only the types that have a render).
+   * Phaser waits for these before create(), so buildings can use them.
+   */
+  preload(): void {
+    const loaded = new Set<string>();
+    for (const type of Object.keys(BUILDINGS) as BuildingType[]) {
+      const texture = getBuildingTexture(type);
+      if (texture && !loaded.has(texture.key)) {
+        loaded.add(texture.key);
+        this.load.image(texture.key, texture.url);
+      }
+    }
+
+    // Second wall orientation (for autotiling joined fences)
+    const wallTex = getBuildingTexture('wall');
+    if (wallTex) {
+      this.load.image(WALL_TEXTURE_COL, wallTex.url.replace(/wall\.png$/, 'wall_b.png'));
+    }
+  }
+
+  /**
+   * Re-evaluate every wall's orientation from its neighbours so a run of walls
+   * forms one continuous fence. Call after any building is added or removed.
+   */
+  private refreshWalls(): void {
+    const wallCells = new Set<string>();
+    for (const b of this.buildings) {
+      if (b.buildingType === 'wall') wallCells.add(cellKey(b.gridRow, b.gridCol));
+    }
+
+    for (const b of this.buildings) {
+      if (b.buildingType !== 'wall') continue;
+      const variant = wallVariant(wallCells, b.gridRow, b.gridCol);
+      b.setSpriteTexture(variant === 'colAxis' ? WALL_TEXTURE_COL : WALL_TEXTURE_ROW);
+    }
   }
 
   async create(): Promise<void> {
@@ -177,13 +224,10 @@ export class MainMap extends Phaser.Scene {
       const gridPos = this.gridSystem.screenToGrid(worldPoint.x, worldPoint.y);
       const def = BUILDINGS[this.selectedBuildingType];
 
-      // Check if placement is valid
-      const isValid = this.gridSystem.canPlace(
-        gridPos.row,
-        gridPos.col,
-        def.width,
-        def.height
-      );
+      // Check if placement is valid (in bounds, unoccupied, and respects spacing)
+      const isValid =
+        this.gridSystem.canPlace(gridPos.row, gridPos.col, def.width, def.height) &&
+        !this.hasSpacingConflict(this.selectedBuildingType, gridPos.row, gridPos.col);
 
       // Get screen position for the building center (centered over the footprint)
       const centerRow = gridPos.row + def.height / 2;
@@ -197,6 +241,14 @@ export class MainMap extends Phaser.Scene {
 
     // Pointer down - start drag or place building
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Demolish mode: left-click a building to remove it
+      if (this.demolishMode) {
+        if (pointer.leftButtonDown()) {
+          this.handleDemolishClick(pointer);
+        }
+        return;
+      }
+
       // If no building selected, start camera drag
       if (!this.selectedBuildingType) {
         isDragging = true;
@@ -250,6 +302,7 @@ export class MainMap extends Phaser.Scene {
     // Escape - cancel building placement
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        this.closeBuildingMenu();
         this.cancelBuildingPlacement();
       } else if (event.ctrlKey || event.metaKey) {
         if (event.key === '=' || event.key === '+') {
@@ -264,55 +317,57 @@ export class MainMap extends Phaser.Scene {
       }
     });
 
-    // Right-click - cancel building placement
+    // Right-click - cancel building placement or exit demolish mode
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown() && this.selectedBuildingType) {
+      if (pointer.rightButtonDown() && (this.selectedBuildingType || this.demolishMode)) {
         this.cancelBuildingPlacement();
       }
     });
   }
 
   /**
-   * Cancel building placement mode
+   * Cancel building placement mode (also exits demolish mode)
    */
   private cancelBuildingPlacement(): void {
     this.selectedBuildingType = null;
     this.lastValidPosition = null;
+    this.demolishMode = false;
 
     if (this.ghostBuilding) {
       this.ghostBuilding.hide();
     }
 
-    // Remove selected state from all buttons
-    document.querySelectorAll('.building-btn').forEach((btn) => {
-      btn.classList.remove('selected');
+    // Remove selected state from building cards
+    document.querySelectorAll('.building-card').forEach((card) => {
+      card.classList.remove('selected');
     });
+    document.getElementById('demolish-btn')?.classList.remove('active');
   }
 
   /**
    * Setup UI button handlers
    */
   private setupUIButtons(): void {
-    const buttons = document.querySelectorAll('.building-btn');
+    // Build the catalog menu once, then wire the "Add Building" button to open it
+    this.populateBuildingMenu();
 
-    buttons.forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        const target = e.currentTarget as HTMLElement;
-        const buildingType = target.dataset.building as BuildingType;
-
-        // Toggle: clicking same button again deselects
-        if (this.selectedBuildingType === buildingType) {
-          this.cancelBuildingPlacement();
-          return;
-        }
-
-        // Update selection state
-        buttons.forEach((b) => b.classList.remove('selected'));
-        target.classList.add('selected');
-
-        this.selectBuildingType(buildingType);
-      });
+    document.getElementById('add-building-btn')?.addEventListener('click', () => {
+      this.openBuildingMenu();
     });
+    document.getElementById('building-menu-close')?.addEventListener('click', () => {
+      this.closeBuildingMenu();
+    });
+    document.getElementById('building-menu-backdrop')?.addEventListener('click', () => {
+      this.closeBuildingMenu();
+    });
+
+    // Demolish button - toggles demolish mode
+    const demolishBtn = document.getElementById('demolish-btn');
+    if (demolishBtn) {
+      demolishBtn.addEventListener('click', () => {
+        this.toggleDemolishMode();
+      });
+    }
 
     // Attack button
     const attackBtn = document.getElementById('attack-btn');
@@ -324,9 +379,133 @@ export class MainMap extends Phaser.Scene {
   }
 
   /**
+   * Build the building catalog menu from shared constants.
+   * Cards are grouped by age and show an image (or color swatch) and price.
+   */
+  private populateBuildingMenu(): void {
+    const grid = document.getElementById('building-menu-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    let currentAge: string | null = null;
+
+    for (const entry of getBuildingCatalog()) {
+      // Age section header
+      if (entry.age !== currentAge) {
+        currentAge = entry.age;
+        const header = document.createElement('div');
+        header.className = 'age-header';
+        header.textContent = entry.ageName;
+        grid.appendChild(header);
+      }
+
+      const card = document.createElement('div');
+      card.className = 'building-card';
+      card.dataset.building = entry.type;
+
+      // Show the rendered sprite if one exists, otherwise a color swatch
+      if (entry.imageUrl) {
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.alt = entry.name;
+        img.src = entry.imageUrl;
+        img.onerror = () => {
+          const swatch = document.createElement('div');
+          swatch.className = 'swatch';
+          swatch.style.background = entry.color;
+          img.replaceWith(swatch);
+        };
+        card.appendChild(img);
+      } else {
+        const swatch = document.createElement('div');
+        swatch.className = 'swatch';
+        swatch.style.background = entry.color;
+        card.appendChild(swatch);
+      }
+
+      const name = document.createElement('div');
+      name.className = 'b-name';
+      name.textContent = entry.name;
+      card.appendChild(name);
+
+      const size = document.createElement('div');
+      size.className = 'b-size';
+      size.textContent = `${entry.width}×${entry.height}`;
+      card.appendChild(size);
+
+      const cost = document.createElement('div');
+      cost.className = 'b-cost';
+      cost.textContent = formatCost(entry.cost);
+      card.appendChild(cost);
+
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.building-card').forEach((c) => c.classList.remove('selected'));
+        card.classList.add('selected');
+        this.selectBuildingType(entry.type);
+        this.closeBuildingMenu();
+        this.updateStatus(`${entry.name} selected - click the grid to place (Esc to cancel)`);
+      });
+
+      grid.appendChild(card);
+    }
+  }
+
+  /**
+   * Open the building catalog menu (marks unaffordable buildings)
+   */
+  private openBuildingMenu(): void {
+    // Reflect affordability against current resources
+    document.querySelectorAll<HTMLElement>('.building-card').forEach((card) => {
+      const type = card.dataset.building as BuildingType | undefined;
+      if (!type) return;
+      const cost = BUILDING_COSTS[type] ?? {};
+      const affordable =
+        this.resources.food >= (cost.food ?? 0) &&
+        this.resources.gold >= (cost.gold ?? 0) &&
+        this.resources.oil >= (cost.oil ?? 0);
+      card.classList.toggle('unaffordable', !affordable);
+    });
+
+    document.getElementById('building-menu')?.classList.remove('hidden');
+  }
+
+  /**
+   * Close the building catalog menu
+   */
+  private closeBuildingMenu(): void {
+    document.getElementById('building-menu')?.classList.add('hidden');
+  }
+
+  /**
+   * Toggle demolish mode on/off
+   */
+  private toggleDemolishMode(): void {
+    if (this.demolishMode) {
+      this.cancelBuildingPlacement();
+      this.updateStatus('Demolish mode off');
+      return;
+    }
+
+    // Entering demolish mode: cancel any active placement first
+    this.selectedBuildingType = null;
+    this.lastValidPosition = null;
+    this.ghostBuilding?.hide();
+    this.closeBuildingMenu();
+    document.querySelectorAll('.building-card').forEach((card) => card.classList.remove('selected'));
+
+    this.demolishMode = true;
+    document.getElementById('demolish-btn')?.classList.add('active');
+    this.updateStatus('Demolish mode - click a building to remove it');
+  }
+
+  /**
    * Select a building type for placement
    */
   private selectBuildingType(type: BuildingType): void {
+    // Selecting a building to place exits demolish mode
+    this.demolishMode = false;
+    document.getElementById('demolish-btn')?.classList.remove('active');
+
     this.selectedBuildingType = type;
 
     // Remove existing ghost
@@ -435,6 +614,8 @@ export class MainMap extends Phaser.Scene {
         this.removeBuildingById(id);
       }
     });
+
+    this.refreshWalls();
   }
 
   /**
@@ -483,13 +664,122 @@ export class MainMap extends Phaser.Scene {
   }
 
   /**
+   * Handle a click while in demolish mode - remove the building under the cursor
+   */
+  private handleDemolishClick(pointer: Phaser.Input.Pointer): void {
+    const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+
+    const building = this.findBuildingAt(worldPoint.x, worldPoint.y);
+    if (!building) {
+      this.updateStatus('No building there - click a building to demolish');
+      return;
+    }
+
+    this.removeBuilding(building);
+  }
+
+  /**
+   * Find the building under a world-space point.
+   *
+   * Two-pass so selection is precise yet still catches the visible sprite:
+   *  1. The building whose footprint diamond contains the point — the exact
+   *     tiles it occupies on the ground (precise, no shadow/margin overreach).
+   *  2. Otherwise the building whose rendered sprite bounds contain the point —
+   *     the sprite rises above its footprint, so this catches a click on the
+   *     building art itself (important for small 1x1 buildings like walls).
+   * In each pass the frontmost (highest depth) match wins.
+   */
+  private findBuildingAt(worldX: number, worldY: number): Building | null {
+    const onFootprint = this.topmostBuilding((b) => this.pointInFootprint(b, worldX, worldY));
+    if (onFootprint) return onFootprint;
+
+    return this.topmostBuilding((b) => b.getBounds().contains(worldX, worldY));
+  }
+
+  /** Highest-depth building satisfying the predicate, or null. */
+  private topmostBuilding(predicate: (b: Building) => boolean): Building | null {
+    let best: Building | null = null;
+    let bestDepth = -Infinity;
+    for (const building of this.buildings) {
+      if (predicate(building) && building.depth >= bestDepth) {
+        best = building;
+        bestDepth = building.depth;
+      }
+    }
+    return best;
+  }
+
+  /** True when a world point lies inside a building's isometric footprint diamond. */
+  private pointInFootprint(building: Building, worldX: number, worldY: number): boolean {
+    const def = BUILDINGS[building.buildingType];
+    const halfW = ((def.width + def.height) * TILE_WIDTH_HALF) / 2;
+    const halfH = ((def.width + def.height) * TILE_HEIGHT_HALF) / 2;
+    const dx = worldX - building.x;
+    const dy = worldY - building.y;
+    return Math.abs(dx) / halfW + Math.abs(dy) / halfH <= 1;
+  }
+
+  /**
+   * Remove a building (online: ask server; offline: handle locally)
+   */
+  private removeBuilding(building: Building): void {
+    if (this.isOnline) {
+      // Server is authoritative: it removes the building and the change
+      // arrives back through state sync (syncBuildings).
+      networkService.removeBuilding(building.buildingId);
+      this.updateStatus(`Demolishing ${building.definition.name}...`);
+    } else {
+      this.removeBuildingLocally(building);
+      this.updateStatus(`Demolished ${building.definition.name}`);
+    }
+  }
+
+  /**
+   * Remove a building locally (offline mode)
+   */
+  private removeBuildingLocally(building: Building): void {
+    const def = BUILDINGS[building.buildingType];
+
+    // Free the grid cells the building occupied
+    this.gridSystem.vacate(building.gridRow, building.gridCol, def.width, def.height);
+
+    // Remove from tracking structures and destroy the sprite
+    this.buildingMap.delete(building.buildingId);
+    this.buildings = this.buildings.filter((b) => b.buildingId !== building.buildingId);
+    building.destroy();
+
+    // Neighbouring walls may need to re-orient now this one is gone
+    this.refreshWalls();
+
+    // Persist the new layout
+    this.saveLayout();
+  }
+
+  /**
+   * Whether placing `type` at (row, col) would sit too close to an existing
+   * building (less than the required 1-cell gap). Fences are exempt.
+   */
+  private hasSpacingConflict(type: BuildingType, row: number, col: number): boolean {
+    const existing = this.buildings.map((b) => ({
+      type: b.buildingType,
+      row: b.gridRow,
+      col: b.gridCol,
+    }));
+    return findSpacingConflict(type, row, col, existing) !== null;
+  }
+
+  /**
    * Place a building on the grid
    */
   private placeBuilding(type: BuildingType, row: number, col: number): void {
     const def = BUILDINGS[type];
 
-    // Double-check placement is valid
+    // Double-check placement is valid (bounds, occupancy, and spacing)
     if (!this.gridSystem.canPlace(row, col, def.width, def.height)) {
+      return;
+    }
+    if (this.hasSpacingConflict(type, row, col)) {
+      this.updateStatus('Too close to another building - leave a 1-cell gap');
       return;
     }
 
@@ -525,6 +815,9 @@ export class MainMap extends Phaser.Scene {
 
     this.buildings.push(building);
     this.buildingMap.set(building.buildingId, building);
+
+    // Re-orient this wall and any neighbours into a continuous run
+    this.refreshWalls();
 
     // Save layout
     this.saveLayout();
@@ -584,6 +877,7 @@ export class MainMap extends Phaser.Scene {
         this.buildings.push(building);
       });
 
+      this.refreshWalls();
       console.log(`Loaded ${layout.buildings.length} buildings from storage`);
     } catch (e) {
       console.error('Failed to load layout:', e);

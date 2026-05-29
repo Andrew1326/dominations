@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Claude Code (transient / local only)
+.claude/reflections/
+.claude/.last_test_run
+
+# Browser automation artifacts
+.playwright-mcp/

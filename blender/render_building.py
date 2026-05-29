@@ -10,6 +10,7 @@ Usage:
 import sys
 import os
 import argparse
+import math
 
 # Ensure blender/ is on the path so lib/ imports work
 sys.path.insert(0, os.path.dirname(__file__))
@@ -42,8 +43,9 @@ def _load_builders():
     BUILDING_BUILDERS['barracks'] = build_barracks
     from buildings.tower import build_tower
     BUILDING_BUILDERS['tower'] = build_tower
-    from buildings.wall import build_wall
+    from buildings.wall import build_wall, build_simple_wall
     BUILDING_BUILDERS['wall'] = build_wall
+    BUILDING_BUILDERS['wallTile'] = build_simple_wall
     from buildings.storage import build_storage
     BUILDING_BUILDERS['storage'] = build_storage
     from buildings.gold_mine import build_gold_mine
@@ -75,6 +77,12 @@ def parse_args():
                         help="Image resolution (square). Default: 1024")
     parser.add_argument("--samples", type=int, default=512,
                         help="Cycles samples. Default: 512")
+    parser.add_argument("--no-ground", action="store_true",
+                        help="Remove the baked ground plate so the building sits on the game grid")
+    parser.add_argument("--no-shadow", action="store_true",
+                        help="Skip the shadow catcher so the sprite is the building only (centers cleanly on tiles)")
+    parser.add_argument("--rotate-z", type=float, default=0.0,
+                        help="Rotate all geometry this many degrees around Z before rendering (e.g. 90 for a perpendicular wall)")
     return parser.parse_args(argv)
 
 
@@ -121,10 +129,33 @@ def main():
         builder = BUILDING_BUILDERS[args.building]
         builder(materials, age=args.age)
 
+    # Optionally strip the baked ground plate so the building sits directly on
+    # the game grid (the in-game tiles provide the ground).
+    if args.no_ground:
+        removed = 0
+        for obj in [o for o in bpy.data.objects if o.name == "Ground" or o.name.startswith("Ground.")]:
+            bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+        print(f"Removed {removed} ground plate object(s)")
+
+    # Optionally rotate all geometry around the world Z origin (e.g. to render a
+    # wall running along the perpendicular isometric axis).
+    if args.rotate_z:
+        bpy.ops.object.select_all(action='SELECT')
+        scene_ctx = bpy.context.scene
+        scene_ctx.cursor.location = (0.0, 0.0, 0.0)
+        prev_pivot = scene_ctx.tool_settings.transform_pivot_point
+        scene_ctx.tool_settings.transform_pivot_point = 'CURSOR'
+        bpy.ops.transform.rotate(value=math.radians(args.rotate_z), orient_axis='Z')
+        scene_ctx.tool_settings.transform_pivot_point = prev_pivot
+        bpy.ops.object.select_all(action='DESELECT')
+        print(f"Rotated geometry {args.rotate_z} deg around Z")
+
     # Camera, lighting & post-processing
     print("Setting up camera, lights, and compositing...")
     setup_lighting()
-    add_shadow_catcher()
+    if not args.no_shadow:
+        add_shadow_catcher()
     setup_camera()
     setup_compositing()
 

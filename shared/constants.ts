@@ -21,6 +21,9 @@ export const TILE_HEIGHT_HALF = TILE_HEIGHT / 2;
 // Cost multiplier per level (e.g., level 2 costs 1.5x level 1)
 export const UPGRADE_COST_MULTIPLIER = 1.5;
 
+// Fraction of a building's cost refunded when it is demolished
+export const BUILDING_REFUND_RATE = 0.5;
+
 // ============================================================
 // Age Definitions
 // ============================================================
@@ -241,7 +244,7 @@ export const BUILDING_DEFS_BY_AGE: Record<Age, Partial<Record<BuildingType, Buil
     house: { type: 'house', name: 'House', width: 2, height: 2, color: 0x4169E1, maxLevel: 3, buildTime: 30, hp: 400, availableFrom: 'stone' },
     farm: { type: 'farm', name: 'Farm', width: 2, height: 2, color: 0x228B22, maxLevel: 3, buildTime: 45, hp: 500, produces: 'food', productionRate: 100, availableFrom: 'stone' },
     storage: { type: 'storage', name: 'Storage Pit', width: 2, height: 2, color: 0x8B7355, maxLevel: 3, buildTime: 40, hp: 600, availableFrom: 'stone' },
-    wall: { type: 'wall', name: 'Wall', width: 1, height: 1, color: 0x808080, maxLevel: 3, buildTime: 10, hp: 300, isDefensive: true, availableFrom: 'stone' },
+    wall: { type: 'wall', name: 'Wall', width: 1, height: 1, color: 0x808080, maxLevel: 3, buildTime: 10, hp: 300, isDefensive: true, allowAdjacent: true, availableFrom: 'stone' },
   },
   bronze: {
     townCenter: { type: 'townCenter', name: 'Town Center', width: 3, height: 3, color: 0x8B4513, maxLevel: 5, buildTime: 120, hp: 3500, availableFrom: 'stone' },
@@ -287,45 +290,46 @@ export const BUILDING_DEFS_BY_AGE: Record<Age, Partial<Record<BuildingType, Buil
   },
 };
 
-// Age-aware building costs (per-age overrides; walk backward for fallback)
+// Age-aware building costs (per-age overrides; walk backward for fallback).
+// All buildings cost gold only.
 export const BUILDING_COSTS_BY_AGE: Record<Age, Partial<Record<BuildingType, ResourceCost>>> = {
   stone: {
-    townCenter: { gold: 1000, food: 500 },
-    house: { gold: 100, food: 50 },
+    townCenter: { gold: 1000 },
+    house: { gold: 100 },
     farm: { gold: 150 },
-    storage: { gold: 200, food: 100 },
+    storage: { gold: 200 },
     wall: { gold: 50 },
   },
   bronze: {
-    goldMine: { gold: 200, food: 100 },
-    barracks: { gold: 400, food: 200 },
-    tower: { gold: 300, food: 150 },
+    goldMine: { gold: 200 },
+    barracks: { gold: 400 },
+    tower: { gold: 300 },
   },
   iron: {
-    blacksmith: { gold: 500, food: 300 },
-    temple: { gold: 800, food: 500 },
+    blacksmith: { gold: 500 },
+    temple: { gold: 800 },
   },
   classical: {
-    library: { gold: 1000, food: 600 },
-    market: { gold: 600, food: 400 },
-    stable: { gold: 700, food: 500 },
+    library: { gold: 1000 },
+    market: { gold: 600 },
+    stable: { gold: 700 },
   },
   medieval: {
-    castle: { gold: 5000, food: 3000 },
+    castle: { gold: 5000 },
   },
   gunpowder: {},
   enlightenment: {
-    university: { gold: 8000, food: 5000 },
+    university: { gold: 8000 },
   },
   industrial: {
-    oilWell: { gold: 500, food: 200 },
-    factory: { gold: 10000, food: 6000, oil: 2000 },
+    oilWell: { gold: 500 },
+    factory: { gold: 10000 },
   },
   modern: {
-    airfield: { gold: 20000, food: 10000, oil: 8000 },
+    airfield: { gold: 20000 },
   },
   digital: {
-    dataCentre: { gold: 50000, food: 20000, oil: 15000 },
+    dataCentre: { gold: 50000 },
   },
 };
 
@@ -412,18 +416,20 @@ export const BUILDING_COSTS: Record<BuildingType, ResourceCost> = (() => {
 // Resource Configuration
 // ============================================================
 
-// Starting resources for new players
+// Starting resources for new players.
+// NOTE: temporarily generous for playtesting/building freely.
 export const STARTING_RESOURCES: Resources = {
-  food: 500,
-  gold: 500,
-  oil: 0,
+  food: 1_000_000,
+  gold: 1_000_000,
+  oil: 1_000_000,
 };
 
-// Maximum resource storage (can be increased by buildings)
+// Maximum resource storage (can be increased by buildings).
+// NOTE: temporarily raised alongside STARTING_RESOURCES for playtesting.
 export const BASE_RESOURCE_CAP: Resources = {
-  food: 10000,
-  gold: 10000,
-  oil: 5000,
+  food: 10_000_000,
+  gold: 10_000_000,
+  oil: 10_000_000,
 };
 
 // Production rate multiplier per building level

@@ -13,6 +13,7 @@ import {
   canAfford,
   deductResources,
 } from '../src/mechanics/ResourceCalculator';
+import { BASE_RESOURCE_CAP } from '@shared/constants';
 
 // Helper to create test buildings
 function createBuilding(
@@ -178,13 +179,14 @@ describe('ResourceCalculator', () => {
     });
 
     it('caps resources at maximum', () => {
-      const current = { food: 9950, gold: 100, oil: 0 };
+      // Start just below the cap so an hour of farm production would exceed it
+      const current = { food: BASE_RESOURCE_CAP.food - 10, gold: 100, oil: 0 };
       const buildings = [createBuilding('farm', 1)];
       const lastUpdated = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
 
       const updated = updateResources(current, buildings, lastUpdated);
 
-      expect(updated.food).toBe(10000); // Capped at max
+      expect(updated.food).toBe(BASE_RESOURCE_CAP.food); // Capped at max
     });
 
     it('handles no time elapsed', () => {
