@@ -23,7 +23,13 @@ import { getBuildingTexture } from '../ui/buildingCatalog';
  * its width roughly matches the footprint's isometric width.
  */
 const SPRITE_FOOTPRINT_FACTOR = 1.3; // display width as a multiple of isoWidth (visual overhang)
-const WALL_FOOTPRINT_FACTOR = 1.15;  // fences just abut along a run (touch end-to-end without heavy overlap, so the line stays even)
+// Fences: sized so the merlon pattern lands an INTEGER number of crenellations
+// per tile-step (≈2). Adjacent wall cells are one tile apart, so identical
+// sprites a tile apart only line up when (tile-step / merlon-period) is a whole
+// number — otherwise the crenellation phase drifts and bunches at every seam
+// (the "uneven crown"). This ratio is camera-zoom-invariant, so the run stays
+// even at every zoom. Tuned empirically against the rendered wall sprite.
+const WALL_FOOTPRINT_FACTOR = 1.25;
 const SPRITE_BASE_Y = 0.92;          // building base position within the cropped image
 
 function isoWidthOf(def: BuildingDefinition): number {
@@ -104,14 +110,21 @@ export class Building extends Phaser.GameObjects.Container {
   }
 
   /**
-   * Swap the sprite texture (used for wall autotiling) and re-fit it to the
-   * footprint. No-op if the texture isn't loaded or this building has no sprite.
+   * Set the sprite texture and horizontal mirror (used for wall autotiling) and
+   * re-fit it to the footprint. The two isometric wall orientations are the same
+   * well-lit art mirrored across X — a 3D-rotated render would face a shaded
+   * side at the camera and read darker/rougher. No-op if the texture isn't
+   * loaded or this building has no sprite.
    */
-  setSpriteTexture(key: string): void {
+  setSpriteTexture(key: string, flipX = false): void {
     if (!this.sprite || !this.scene.textures.exists(key)) return;
-    if (this.sprite.texture.key === key) return;
-    this.sprite.setTexture(key);
-    placeSprite(this.sprite, this.definition);
+    const sameKey = this.sprite.texture.key === key;
+    if (sameKey && this.sprite.flipX === flipX) return;
+    if (!sameKey) {
+      this.sprite.setTexture(key);
+      placeSprite(this.sprite, this.definition);
+    }
+    this.sprite.setFlipX(flipX);
   }
 
   /**

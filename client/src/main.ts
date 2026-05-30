@@ -24,3 +24,8 @@ const game = new Phaser.Game(config);
 
 // Export for potential external access
 export { game };
+
+// Dev-only: expose the game instance for debugging/inspection in the console.
+if (import.meta.env.DEV) {
+  (window as unknown as { __game: Phaser.Game }).__game = game;
+}

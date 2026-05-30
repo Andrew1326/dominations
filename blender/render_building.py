@@ -43,9 +43,10 @@ def _load_builders():
     BUILDING_BUILDERS['barracks'] = build_barracks
     from buildings.tower import build_tower
     BUILDING_BUILDERS['tower'] = build_tower
-    from buildings.wall import build_wall, build_simple_wall
+    from buildings.wall import build_wall, build_simple_wall, build_corner_tower
     BUILDING_BUILDERS['wall'] = build_wall
     BUILDING_BUILDERS['wallTile'] = build_simple_wall
+    BUILDING_BUILDERS['wallCorner'] = build_corner_tower
     from buildings.storage import build_storage
     BUILDING_BUILDERS['storage'] = build_storage
     from buildings.gold_mine import build_gold_mine

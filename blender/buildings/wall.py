@@ -743,3 +743,43 @@ def build_simple_wall(materials, age='medieval'):
     for my in (-0.8, -0.4, 0.0, 0.4, 0.8):
         bmesh_box("Merlon_%.1f" % my, (half_th * 2 - 0.04, merlon_w, merlon_h),
                   (0, my, bz + merlon_h / 2), m['stone'])
+
+
+def build_corner_tower(materials, age='medieval'):
+    """A clean, 4-fold-symmetric corner tower for wall corners.
+
+    A run of straight wall segments meeting at a corner leaves a protruding nub
+    (a straight segment can't turn 90 deg). This square tower sits on the corner
+    cell instead: it's symmetric in X and Y so it reads correctly for any pair of
+    arms, slightly taller and wider than the wall so the arms tuck into it, with
+    a crenellated battlement ring on top.
+    """
+    m = materials
+    Z = 0.0
+    half = 0.32          # ~0.64 square — a touch wider than the 0.40 wall so arms tuck in
+    body_h = 0.74        # a touch taller than the wall body (0.62) — reads as a tower
+
+    # Square tower body
+    bmesh_box("TowerBody", (half * 2, half * 2, body_h), (0, 0, Z + body_h / 2), m['stone'], bevel=0.02)
+
+    # Matching stone-course lines
+    for z_off in [body_h * 0.4, body_h * 0.75]:
+        bmesh_box("TCourse_%.2f" % z_off, (half * 2 + 0.005, half * 2 + 0.005, 0.012),
+                  (0, 0, Z + z_off), m['stone_dark'])
+
+    # Coping cap with slight overhang on all sides
+    cap_z = Z + body_h
+    bmesh_box("TCap", (half * 2 + 0.10, half * 2 + 0.10, 0.06), (0, 0, cap_z + 0.03), m['stone_trim'])
+
+    # Crenellated ring — merlons at the 4 corners and 4 edge midpoints
+    bz = cap_z + 0.06
+    merlon_h = 0.22
+    mw = 0.16
+    e = half - 0.02      # merlon centre offset from tower centre
+    positions = [
+        (e, e), (-e, e), (e, -e), (-e, -e),   # corners
+        (e, 0), (-e, 0), (0, e), (0, -e),     # edge midpoints
+    ]
+    for i, (mx, my) in enumerate(positions):
+        bmesh_box("TMerlon_%d" % i, (mw, mw, merlon_h),
+                  (mx, my, bz + merlon_h / 2), m['stone'])

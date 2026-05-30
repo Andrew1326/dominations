@@ -24,11 +24,14 @@ import {
 import { networkService, ServerState } from '../../services/NetworkService';
 import { getBuildingCatalog, formatCost, getBuildingTexture } from '../ui/buildingCatalog';
 import { findSpacingConflict } from '@shared/placement';
-import { wallVariant, cellKey } from '../systems/wallTiling';
+import { wallVariant, shouldMirrorWall, cellKey } from '../systems/wallTiling';
 
-// Phaser texture keys for the two wall orientations (autotiling)
-const WALL_TEXTURE_ROW = 'building-wall';
-const WALL_TEXTURE_COL = 'building-wall-b';
+// Wall sprite texture. The two isometric orientations are this one well-lit
+// render, mirrored across X for the perpendicular (col) axis (see refreshWalls).
+const WALL_TEXTURE = 'building-wall';
+// Corner cells (neighbours on both axes) use a dedicated symmetric corner tower
+// instead of a straight segment (which would protrude past the turn).
+const WALL_CORNER_TEXTURE = 'building-wall-corner';
 
 export class MainMap extends Phaser.Scene {
   private gridSystem!: GridSystem;
@@ -68,10 +71,10 @@ export class MainMap extends Phaser.Scene {
       }
     }
 
-    // Second wall orientation (for autotiling joined fences)
+    // Dedicated corner-tower sprite for wall corners (alongside wall.png).
     const wallTex = getBuildingTexture('wall');
     if (wallTex) {
-      this.load.image(WALL_TEXTURE_COL, wallTex.url.replace(/wall\.png$/, 'wall_b.png'));
+      this.load.image(WALL_CORNER_TEXTURE, wallTex.url.replace(/wall\.png$/, 'wall_corner.png'));
     }
   }
 
@@ -88,7 +91,14 @@ export class MainMap extends Phaser.Scene {
     for (const b of this.buildings) {
       if (b.buildingType !== 'wall') continue;
       const variant = wallVariant(wallCells, b.gridRow, b.gridCol);
-      b.setSpriteTexture(variant === 'colAxis' ? WALL_TEXTURE_COL : WALL_TEXTURE_ROW);
+      if (variant === 'corner') {
+        // Corner cell: use the symmetric corner tower (never mirrored).
+        b.setSpriteTexture(WALL_CORNER_TEXTURE, false);
+      } else {
+        // Mirror the single well-lit wall art for the col axis; row axis /
+        // isolated use it unflipped.
+        b.setSpriteTexture(WALL_TEXTURE, shouldMirrorWall(variant));
+      }
     }
   }
 
