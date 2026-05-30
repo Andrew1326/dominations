@@ -25,6 +25,7 @@ import { networkService, ServerState } from '../../services/NetworkService';
 import { getBuildingCatalog, formatCost, getBuildingTexture } from '../ui/buildingCatalog';
 import { findSpacingConflict } from '@shared/placement';
 import { wallVariant, shouldMirrorWall, cellKey } from '../systems/wallTiling';
+import { gridLineCells } from '../systems/gridLine';
 
 // Wall sprite texture. The two isometric orientations are this one well-lit
 // render, mirrored across X for the perpendicular (col) axis (see refreshWalls).
@@ -216,6 +217,33 @@ export class MainMap extends Phaser.Scene {
     let cameraStartX = 0;
     let cameraStartY = 0;
 
+    // Drag-to-paint walls: hold and drag to lay a continuous run.
+    let isPaintingWalls = false;
+    let lastPaintedCell: { row: number; col: number } | null = null;
+    const paintedCells = new Set<string>();
+
+    const isPaintable = (type: BuildingType | null): boolean =>
+      !!type && !!BUILDINGS[type].allowAdjacent;
+
+    // Place one wall cell during a paint stroke, de-duping within the stroke.
+    const paintCell = (row: number, col: number): void => {
+      const type = this.selectedBuildingType;
+      if (!type) return;
+      const key = cellKey(row, col);
+      if (paintedCells.has(key)) return;
+      const def = BUILDINGS[type];
+      if (!this.gridSystem.canPlace(row, col, def.width, def.height)) return;
+      if (this.hasSpacingConflict(type, row, col)) return;
+      paintedCells.add(key);
+      this.placeBuilding(type, row, col);
+    };
+
+    const stopPainting = (): void => {
+      isPaintingWalls = false;
+      lastPaintedCell = null;
+      paintedCells.clear();
+    };
+
     // Pointer move - update ghost building position and handle drag
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       // Handle camera dragging
@@ -247,6 +275,16 @@ export class MainMap extends Phaser.Scene {
       // Update ghost building
       this.ghostBuilding.update(screenPos.x, screenPos.y, isValid);
       this.lastValidPosition = { row: gridPos.row, col: gridPos.col, valid: isValid };
+
+      // Drag-to-paint walls: place every cell crossed since the last sample
+      // (interpolated so a fast drag leaves no gaps).
+      if (isPaintingWalls && pointer.isDown) {
+        const from = lastPaintedCell ?? gridPos;
+        for (const cell of gridLineCells(from.row, from.col, gridPos.row, gridPos.col)) {
+          paintCell(cell.row, cell.col);
+        }
+        lastPaintedCell = { row: gridPos.row, col: gridPos.col };
+      }
     });
 
     // Pointer down - start drag or place building
@@ -272,16 +310,26 @@ export class MainMap extends Phaser.Scene {
       // Place building if valid position
       if (!this.lastValidPosition || !this.lastValidPosition.valid) return;
 
-      this.placeBuilding(
-        this.selectedBuildingType,
-        this.lastValidPosition.row,
-        this.lastValidPosition.col
-      );
+      const { row, col } = this.lastValidPosition;
+      this.placeBuilding(this.selectedBuildingType, row, col);
+
+      // Walls: begin a drag-paint stroke so dragging lays a continuous run.
+      if (pointer.leftButtonDown() && isPaintable(this.selectedBuildingType)) {
+        isPaintingWalls = true;
+        paintedCells.clear();
+        paintedCells.add(cellKey(row, col));
+        lastPaintedCell = { row, col };
+      }
     });
 
-    // Pointer up - stop dragging
+    // Pointer up - stop dragging / painting
     this.input.on('pointerup', () => {
       isDragging = false;
+      stopPainting();
+    });
+    this.input.on('pointerupoutside', () => {
+      isDragging = false;
+      stopPainting();
     });
 
     // Mouse wheel - zoom in/out (Google Maps style: zoom toward cursor)
