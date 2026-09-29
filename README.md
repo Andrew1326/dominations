@@ -1,11 +1,3 @@
-This is an ambitious project. "DomiNations" is a deep MMORTS (Massively Multiplayer Online Real-Time Strategy) game that combines base-building (like *Clash of Clans*) with civilization advancement (like *Civilization*).
-
-To build a browser-based version, you need a robust tech stack that can handle real-time graphics and a secure backend to prevent cheating.
-
-Here is a comprehensive `README.md` file designed to structure your project, guide your technology choices, and outline the implementation roadmap.
-
-***
-
 # OpenCivilizations (Web-Based MMORTS)
 
 **OpenCivilizations** is a browser-based strategy game inspired by *DomiNations*. Players build a civilization from the Stone Age to the Space Age, manage resources, design defensive layouts, and conquer rival nations in real-time or asynchronous battles.
